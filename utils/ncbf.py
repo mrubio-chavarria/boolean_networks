@@ -4,7 +4,7 @@ INDICATIONS:
 	In this file, they are given several utilities to the calculation of nested canalizing
 boolean functions (boolean_networks).
 """
-from itertools import combinations
+from itertools import combinations, permutations, product
 from functools import reduce
 from operator import add
 from random import choice
@@ -30,10 +30,31 @@ def charCal(row):
     """
     DESCRIPTION:
     :param row: list of string with different length.
-    :return: weight: number of letters in the whole list.
+    :return: number of letters in the whole list.
     """
-    weight = sum([len(element) for element in row])
-    return weight
+    return sum([len(element) for element in row])
+
+def relatedPaths(path, path_params, tree, other_tree):
+    """
+    DESCRIPTION:
+    A function that, given a path, returns all related paths.
+    :param path: a set of layers.
+    :param path_params: calculations of each step of the path.
+    :param tree: tree of the inital step of the path.
+    :return: set of all related paths.
+    """
+    # Parameters
+    params = np.array(path_params)
+    paths = []
+    # All combinations with the same structure
+    even_perms = list(permutations(path[::2]))
+    odd_perms = list(permutations(path[1::2]))
+    perms = list(product(even_perms, odd_perms))
+    for perm in perms:
+        path[::2] = list(perm[0])
+        path[1::2] = list(perm[1])
+        paths.append(path)
+    return paths
 
 def pathCalc(row, paths):
     """
@@ -117,13 +138,11 @@ def pathCalc(row, paths):
             # Assess the exit
             if p_ac == p_total:
                 break
-        # Store paths and params
-        paths.append(path)
+        # Set of related paths
+        paths_set = relatedPaths(path, path_params, tree_act, tree_inh)
+        # Store path and param
+        paths = paths + paths_set
         paths_params[count] = path_params
-        count += 1
-        rev = path[::-1]
-        paths.append(rev)
-        paths_params[count] = 'reverse'
         count += 1
 
     return paths
