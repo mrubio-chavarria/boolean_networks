@@ -56,6 +56,40 @@ def relatedPaths(path, path_params, tree, other_tree):
         paths.append(path)
     return paths
 
+def auxiliar_function(groupA, groupB, n):
+    """
+    DESCRIPTION
+    """
+    for el_A1 in groupA:
+        for el_B1 in groupB:
+            for el_A2 in groupA:
+                for el_B2 in groupB:
+                    struct = [el_A1, el_B1, el_A2, el_B2]
+                    if sum(struct) == n:
+                        yield struct
+
+
+def structsCalc(groupA, groupB, n):
+    """
+    DESCRIPTION:
+    A function that achieves all the combinations of numbers from 0 to groupA, and from 0 to groupB in an iterative way
+    and each row sums n.
+    :param groupA: number of elements in the first group.
+    :param groupB: number of elements in the second group.
+    :param n: total value by group.
+    :return: list of possible structures.
+    """
+    groups = [np.linspace(1, groupA, groupA), np.linspace(1, groupB, groupB)]
+    selected = []
+    for i in range(0, 2):
+        groupA = groups[i]
+        groupB = groups[1-i]
+        if i == 0:
+            selected = list(auxiliar_function(groupA, groupB, n))
+        else:
+            selected = selected + list(auxiliar_function(groupA, groupB, n))
+    return selected
+
 def pathCalc(row, paths):
     """
     DESCRIPTION:
@@ -83,14 +117,16 @@ def pathCalc(row, paths):
         if level is not None:
             tree_inh.append(level)
 
+    # Calculate levels combinations
+    structs = structsCalc(len(tree_act), len(tree_inh), p_total)
+
     # Start to calculate the paths
     paths = []
     paths_params = {}
     count = 0
-    # Develop a set of paths
-    flat_tree = [item for sublist in tree_act for item in sublist]
-    for initial_leaf in flat_tree:
+    for branch in tree_act:
         # Initialize the parameters
+        initial_leaf = branch[0]
         path = [initial_leaf]
         path_params = []
         var_act = e_act - len(initial_leaf)
