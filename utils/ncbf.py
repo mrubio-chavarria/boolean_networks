@@ -56,17 +56,56 @@ def relatedPaths(path, path_params, tree, other_tree):
         paths.append(path)
     return paths
 
-def auxiliar_function(groupA, groupB, n):
+def auxiliar_function(groupA, groupB, n, paths=[]):
     """
-    DESCRIPTION
+    DESCRIPTION:
+    A function to iterate over a dynamic number of for loops.
+    :param flag: what indicates the group in which we are to iterate. False indicates groupA, True groupB.
+    :return: all possible structures.
     """
-    for el_A1 in groupA:
-        for el_B1 in groupB:
-            for el_A2 in groupA:
-                for el_B2 in groupB:
-                    struct = [el_A1, el_B1, el_A2, el_B2]
+    if len(paths):
+        if len(paths[0])%2 == 1:
+            for el_B in groupB:
+                for path in paths:
+                    path.append(el_B)
+                    if len(path) == n:
+                        yield path
+                    else:
+                        auxiliar_function(groupA, groupB, n, paths=paths)
+        else:
+            for el_A in groupA:
+                for path in paths:
+                    path.append(el_A)
+                    if len(path) == n:
+                        yield path
+                    else:
+                        auxiliar_function(groupA, groupB, n, paths=paths)
+    else:
+        for el_A in groupA:
+            paths.append([el_A])
+            auxiliar_function(groupA, groupB, n, paths=paths)
+
+
+
+    """
+    struct = np.zeros(n)
+    for i in range(0, n):
+        for el_A1 in groupA:
+            struct[0] = el_A1
+            for el_B1 in groupB:
+                struct[1] = el_B1
+                for el_A2 in groupA:
                     if sum(struct) == n:
-                        yield struct
+                        continue
+                    else:
+                        struct[2] = el_A2
+                    for el_B2 in groupB:
+                        if sum(struct) == n:
+                            pass
+                        else:
+                            struct[3] = el_B2
+                        yield list(struct - 1)
+    """
 
 
 def structsCalc(groupA, groupB, n):
@@ -85,9 +124,11 @@ def structsCalc(groupA, groupB, n):
         groupA = groups[i]
         groupB = groups[1-i]
         if i == 0:
-            selected = list(auxiliar_function(groupA, groupB, n))
+            paths = []
+            selected = list(auxiliar_function(groupA, groupB, n, paths=paths))
         else:
-            selected = selected + list(auxiliar_function(groupA, groupB, n))
+            paths = []
+            selected = selected + list(auxiliar_function(groupA, groupB, n, paths=paths))
     return selected
 
 def pathCalc(row, paths):
