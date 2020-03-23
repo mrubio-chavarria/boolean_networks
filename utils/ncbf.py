@@ -4,7 +4,7 @@ INDICATIONS:
 	In this file, they are given several utilities to the calculation of nested canalizing
 boolean functions (boolean_networks).
 """
-from itertools import combinations, permutations, product
+from itertools import combinations, permutations, product, groupby
 from functools import reduce
 from operator import add
 from random import choice
@@ -56,57 +56,56 @@ def relatedPaths(path, path_params, tree, other_tree):
         paths.append(path)
     return paths
 
-def auxiliar_function(groupA, groupB, n, paths=[]):
+def auxiliar_function(groupA, groupB, n, path=None):
     """
     DESCRIPTION:
-    A function to iterate over a dynamic number of for loops.
-    :param flag: what indicates the group in which we are to iterate. False indicates groupA, True groupB.
-    :return: all possible structures.
+    A generator to iterate over a dynamic number of for loops. Here are generated all possible structures given a set of
+    groups.
+    :param groupA: first set of levels in the structure.
+    :param groupB: second set of levels in the structure.
+    :param n: total weight of the path.
+    :param path: path to propagate, to generate.
+    :return: all possible structures, paths.
     """
-    if len(paths):
-        if len(paths[0])%2 == 1:
-            for el_B in groupB:
-                for path in paths:
-                    path.append(el_B)
-                    if len(path) == n:
-                        yield path
-                    else:
-                        auxiliar_function(groupA, groupB, n, paths=paths)
+    # Parameters to assess the path
+    n_A = groupA[-1]
+    n_B = groupB[-1]
+    if path:
+        if len(path)%2 == 0:
+            # Last layer A, add B
+            for el_B2 in groupB:
+                pathB2 = path + [el_B2]
+                valB = np.sum(pathB2)
+                if valB == n:
+                    model = np.array(pathB2)
+                    vecA = np.zeros([1, len(model)])
+                    vecA[0, 0::2] = 1
+                    vecB = np.zeros([1, len(model)])
+                    vecB[0, 1::2] = 1
+                    if (np.sum(vecB * model) == n_B) and (np.sum(vecA * model) == n_A):
+                        yield pathB2
+                elif valB < n:
+                    yield from auxiliar_function(groupA, groupB, n, path=pathB2)
         else:
-            for el_A in groupA:
-                for path in paths:
-                    path.append(el_A)
-                    if len(path) == n:
-                        yield path
-                    else:
-                        auxiliar_function(groupA, groupB, n, paths=paths)
+            # Last layer B, add A
+            for el_A2 in groupA:
+                pathA2 = path + [el_A2]
+                valA = np.sum(pathA2)
+                if valA == n:
+                    model = np.array(pathA2)
+                    vecA = np.zeros([1, len(model)])
+                    vecA[0, 0::2] = 1
+                    vecB = np.zeros([1, len(model)])
+                    vecB[0, 1::2] = 1
+                    if (np.sum(vecB * model) == n_B) and (np.sum(vecA * model) == n_A):
+                        yield pathA2
+                elif valA < n:
+                    yield from auxiliar_function(groupA, groupB, n, path=pathA2)
     else:
-        for el_A in groupA:
-            paths.append([el_A])
-            auxiliar_function(groupA, groupB, n, paths=paths)
-
-
-
-    """
-    struct = np.zeros(n)
-    for i in range(0, n):
+        # Start with a layer of A
         for el_A1 in groupA:
-            struct[0] = el_A1
-            for el_B1 in groupB:
-                struct[1] = el_B1
-                for el_A2 in groupA:
-                    if sum(struct) == n:
-                        continue
-                    else:
-                        struct[2] = el_A2
-                    for el_B2 in groupB:
-                        if sum(struct) == n:
-                            pass
-                        else:
-                            struct[3] = el_B2
-                        yield list(struct - 1)
-    """
-
+            pathA1 = [el_A1]
+            yield from auxiliar_function(groupA, groupB, n, path=pathA1)
 
 def structsCalc(groupA, groupB, n):
     """
@@ -118,18 +117,11 @@ def structsCalc(groupA, groupB, n):
     :param n: total value by group.
     :return: list of possible structures.
     """
-    groups = [np.linspace(1, groupA, groupA), np.linspace(1, groupB, groupB)]
-    selected = []
-    for i in range(0, 2):
-        groupA = groups[i]
-        groupB = groups[1-i]
-        if i == 0:
-            paths = []
-            selected = list(auxiliar_function(groupA, groupB, n, paths=paths))
-        else:
-            paths = []
-            selected = selected + list(auxiliar_function(groupA, groupB, n, paths=paths))
-    return selected
+    groupA = np.linspace(1, groupA, groupA)
+    groupB = np.linspace(1, groupB, groupB)
+    selectedA = list(auxiliar_function(groupA, groupB, n))
+    selectedB = list(auxiliar_function(groupB, groupA, n))
+    return [selectedA, selectedB]
 
 def pathCalc(row, paths):
     """
@@ -158,7 +150,7 @@ def pathCalc(row, paths):
         if level is not None:
             tree_inh.append(level)
 
-    # Calculate levels combinations
+    # Calculate combinations of levels
     structs = structsCalc(len(tree_act), len(tree_inh), p_total)
 
     # Start to calculate the paths
