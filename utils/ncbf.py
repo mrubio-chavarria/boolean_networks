@@ -153,66 +153,90 @@ def pathCalc(row, paths):
     # Calculate combinations of levels
     structs = structsCalc(len(tree_act), len(tree_inh), p_total)
 
-    # Start to calculate the paths
+    # Calculate the paths
     paths = []
     paths_params = {}
-    count = 0
-    for branch in tree_act:
-        # Initialize the parameters
-        initial_leaf = branch[0]
-        path = [initial_leaf]
-        path_params = []
-        var_act = e_act - len(initial_leaf)
-        var_inh = e_inh
-        p_ac = len(initial_leaf)
-        p_c = p_total - p_ac - var_act
-        level = 0
-        # Store the step parameters
-        path_params.append([p_total, p_ac, var_act, var_inh, p_c, level])
-        while True:
-            # Set the level in the tree
-            if var_act == 0:
-                next_level = p_c - 1
-            else:
-                next_level = int(choice(linspace(0, p_c - 1, p_c)))
-            # Add inhibitor layer
-            local_inh = get_level(tree_inh, path, next_level)
-            next_leaf = choice(local_inh)
-            path.append(next_leaf)
-            # Update parameters
-            p_ac = charCal(path)
-            var_inh += -len(next_leaf)
-            p_c = p_total - p_ac - var_inh
-            # Store the step parameters
-            path_params.append([p_total, p_ac, var_act, var_inh, p_c, next_level])
-            # Assess the exit
-            if p_ac == p_total:
-                break
+    for s in range(0, 2):
+        if s == 0:
+            even_tree = tree_act
+            e_even = e_act
+            odd_tree = tree_inh
+            e_odd = e_inh
+        else:
+            even_tree = tree_inh
+            e_even = e_inh
+            odd_tree = tree_act
+            e_odd = e_even
+        structs_set = structs[s]
 
-            # Set the level in the tree
-            if var_inh == 0:
-                level = p_c - 1
-            else:
-                level = int(choice(linspace(0, p_c - 1, p_c)))
-            # Add activator layer
-            local_act = get_level(tree_act, path, level)
-            leaf = choice(local_act)
-            path.append(leaf)
-            # Update parameters
-            p_ac = charCal(path)
-            var_act += -len(leaf)
-            p_c = p_total - p_ac - var_act
+        count = 0
+        for struct in structs_set:
+
+            # Initialize the parameters
+            struct = np.array(struct) - 1
+            struct = struct.astype(int).tolist()
+            initial_leaf = choice(even_tree[struct[0]])
+            path = [initial_leaf]
+            path_params = []
+            var_even = e_even - len(initial_leaf)
+            var_odd = e_odd
+            p_ac = len(initial_leaf)
+            p_c = p_total - p_ac - var_even
+            level = 0
+
             # Store the step parameters
-            path_params.append([p_total, p_ac, var_act, var_inh, p_c, level])
-            # Assess the exit
-            if p_ac == p_total:
-                break
-        # Set of related paths
-        paths_set = relatedPaths(path, path_params, tree_act, tree_inh)
-        # Store path and param
-        paths = paths + paths_set
-        paths_params[count] = path_params
-        count += 1
+            path_params.append([p_total, p_ac, var_even, var_odd, p_c, level])
+            struct_count = 1
+            while True:
+                # Set the level in the tree
+                if var_even == 0:
+                    next_level = p_c - 1
+                else:
+                    # Old by chance version:
+                    # next_level = int(choice(linspace(0, p_c - 1, p_c)))
+                    next_level = struct[struct_count]
+                    struct_count += 1
+                # Add inhibitor layer
+                local_odd = get_level(odd_tree, path, next_level)
+                next_leaf = choice(local_odd)
+                path.append(next_leaf)
+                # Update parameters
+                p_ac = charCal(path)
+                var_odd += -len(next_leaf)
+                p_c = p_total - p_ac - var_odd
+                # Store the step parameters
+                path_params.append([p_total, p_ac, var_even, var_odd, p_c, next_level])
+                # Assess the exit
+                if p_ac == p_total:
+                    break
+
+                # Set the level in the tree
+                if var_even == 0:
+                    level = p_c - 1
+                else:
+                    # Old by chance version:
+                    # level = int(choice(linspace(0, p_c - 1, p_c)))
+                    level = struct[struct_count]
+                    struct_count += 1
+                # Add activator layer
+                local_even = get_level(even_tree, path, level)
+                leaf = choice(local_even)
+                path.append(leaf)
+                # Update parameters
+                p_ac = charCal(path)
+                var_even += -len(leaf)
+                p_c = p_total - p_ac - var_even
+                # Store the step parameters
+                path_params.append([p_total, p_ac, var_even, var_odd, p_c, level])
+                # Assess the exit
+                if p_ac == p_total:
+                    break
+            # Set of related paths
+            paths_set = relatedPaths(path, path_params, even_tree, odd_tree)
+            # Store path and param
+            paths = paths + paths_set
+            paths_params[count] = path_params
+            count += 1
 
     return paths
 
