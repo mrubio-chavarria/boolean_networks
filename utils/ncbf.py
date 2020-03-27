@@ -4,11 +4,11 @@ INDICATIONS:
 	In this file, they are given several utilities to the calculation of nested canalizing
 boolean functions (boolean_networks).
 """
-from itertools import combinations, permutations, product, groupby
+from itertools import combinations, permutations, product
 from functools import reduce
 from operator import add
 from random import choice
-from numpy import linspace
+import pandas as pd
 import numpy as np
 
 
@@ -44,6 +44,7 @@ def relatedPaths(path, path_params, tree, other_tree):
     :return: set of all related paths.
     """
     # Parameters
+    new_path = np.zeros([1, len(path)]).tolist()[0]
     params = np.array(path_params)
     paths = []
     # All combinations with the same structure
@@ -51,9 +52,11 @@ def relatedPaths(path, path_params, tree, other_tree):
     odd_perms = list(permutations(path[1::2]))
     perms = list(product(even_perms, odd_perms))
     for perm in perms:
-        path[::2] = list(perm[0])
-        path[1::2] = list(perm[1])
-        paths.append(path)
+        new_path[::2] = list(perm[0])
+        new_path[1::2] = list(perm[1])
+        if new_path in paths:
+            continue
+        paths.append(new_path[:])
     return paths
 
 def auxiliar_function(groupA, groupB, n, path=None):
@@ -123,10 +126,12 @@ def structsCalc(groupA, groupB, n):
     selectedB = list(auxiliar_function(groupB, groupA, n))
     return [selectedA, selectedB]
 
-def pathCalc(row, paths):
+def pathCalc(row):
     """
     DESCRIPTION:
     A function to calculate a path in the tree of functions
+    :param row: a row of the networks table. Activators and inhibitors.
+    :return: a list with all possible functions which meet with the row element.
     """
 
     # Parameters
@@ -135,6 +140,14 @@ def pathCalc(row, paths):
     e_act = len(act)
     e_inh = len(inh)
     p_total = e_act + e_inh
+
+    # Special cases of empty fields
+    if act == [''] and inh != ['']:
+        return [[''.join(inh)]]
+    elif act != [''] and inh == ['']:
+        return [[''.join(act)]]
+    elif act == [''] and inh == ['']:
+        return ['INPUT']
 
     # Tree of activators
     tree_act = [act]
@@ -234,7 +247,7 @@ def pathCalc(row, paths):
             # Set of related paths
             paths_set = relatedPaths(path, path_params, even_tree, odd_tree)
             # Store path and param
-            paths = paths + paths_set
+            paths = paths[:] + paths_set[:]
             paths_params[count] = path_params
             count += 1
 
@@ -244,9 +257,57 @@ def ncbfCalc(data):
     """
     DESCRIPTION:
     With this function, given a graph, we obtain all the possible NCBFs.
+    :param data: a dataframe with the representation of the network. One row per node, first column for activators and
+    second for inhibitors.
+    :return: all possible NCBF for each gene according with the structure presented in Murrugarra 2013 for NCBF.
     """
     paths = []
     for index, row in data.iterrows():
         # Obtain the number of possible layers
-        paths.append(pathCalc(row=row, paths=[]))
+        paths.append(pathCalc(row=row))
+
+    # Build the response dataframe
+    paths = pd.Series(data=paths, index=data.index)
     return paths
+
+def networksCalc(paths, path=None, index=0):
+    """
+    DESCRIPTION:
+    Given an object of all possible combinations, the one offered by the function above, we build another with all
+    possible networks. One network per line, one node per column.
+    :param data: the set of all possible combinations of functions.
+    :return: the network. Due to the fact that we have a generator, it will be a list of objects.
+    """
+    if path is not None:
+        if index%2 == 0:
+            for step in paths.iloc[index]:
+                path_second = path[:] + [step]
+                index_second_A = index + 1
+                if index_second_A >= len(paths.index):
+                    yield path_second
+                else:
+                    yield from networksCalc(paths, path=path_second, index=index_second_A)
+        else:
+            for step in paths.iloc[index]:
+                path_second = path[:] + [step]
+                index_second_B = index + 1
+                if index_second_B >= len(paths.index):
+                    yield path_second
+                else:
+                    yield from networksCalc(paths, path=path_second, index=index_second_B)
+    else:
+        index = 0
+        for step in paths.iloc[index]:
+            path_first = [step]
+            index_first = index + 1
+            yield from networksCalc(paths, path=path_first, index=index_first)
+
+
+def funcValidator(fun, attractors):
+    """
+    DESCRIPTION:
+    Given a function and an attractor, it is returned whether the function meets the attractor condition or not.
+    :param fun: NCBF to be validated with the structure of Murrugarra 2013.
+    :return: a flag saying if the condition is met (True) or not (False).
+    """
+
