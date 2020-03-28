@@ -1,9 +1,10 @@
 
 """
 INDICATIONS:
-	In this file, they are given several utilities to the calculation of nested canalizing
-boolean functions (boolean_networks).
+In this file, they are given several utilities to the calculation of nested canalizing boolean functions
+(boolean_networks).
 """
+
 from itertools import combinations, permutations, product
 from functools import reduce
 from operator import add
@@ -303,11 +304,17 @@ def networksCalc(paths, path=None, index=0):
             yield from networksCalc(paths, path=path_first, index=index_first)
 
 
-def funcValidator(fun, attractors):
+def netValidator(networks, graph, attractors):
     """
     DESCRIPTION:
     Given a function and an attractor, it is returned whether the function meets the attractor condition or not.
     :param fun: NCBF to be validated with the structure of Murrugarra 2013.
     :return: a flag saying if the condition is met (True) or not (False).
     """
+    for net in networks:
+        for attractor in attractors:
+            print(graph)
+            print(net)
+            print('HOLA')
+
 

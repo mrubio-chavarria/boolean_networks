@@ -6,21 +6,25 @@ In this script we test all the functions developed.
 
 import numpy as np 
 import pandas as pd
-from utils.ncbf import ncbfCalc, networksCalc
+from utils.ncbf import ncbfCalc, networksCalc, netValidator
+from utils.stp import stp, dumM, swapM, phiGen
 
 def main():
 
-    # Build the input object.
+    # Build the input object
     index = np.array(['I', 'A', 'B', 'C', 'D'])
     columns = np.array(['activators', 'inhibitors'])
     data = np.array([[[''], ['']], [['I'], ['C']], [['A'], ['D']], [['B'], ['']], [['B', 'C'], ['A']]])
     data = pd.DataFrame(data=data, index=index, columns=columns)
 
-    # We get another DataFrame with all the possible ncbf.
+    # Get another DataFrame with all the possible ncbf
     paths = ncbfCalc(data=data)
 
-    # We get all possible networks given the set of paths.
+    # Get all possible networks given the set of paths
     networks = list(networksCalc(paths))
-    print(networks)
+
+    # Return the set of networks which meet the condition
+    attractors = [[0, 0, 0, 0, 0]]
+    # networks = netValidator(networks, data, attractors)
 
 main()
