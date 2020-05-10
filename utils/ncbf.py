@@ -11,6 +11,7 @@ from operator import add
 from random import choice
 import pandas as pd
 import numpy as np
+from utils.stp import lGen
 
 
 def get_level(tree, path, level):
@@ -313,8 +314,6 @@ def netValidator(networks, graph, attractors):
     """
     for net in networks:
         for attractor in attractors:
-            print(graph)
-            print(net)
-            print('HOLA')
+            l = lGen(net, graph)
 
 
