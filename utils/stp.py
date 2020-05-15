@@ -5,10 +5,12 @@ INDICATIONS:
 In this file, they are given several utilities to construct boolean networks based on the Semi-Tensor product. It is all
 based in the structure stated in Murrugarra 2013.
 """
-
+import re
 import numpy as np
 from numpy import matlib as mb
-from random import choice
+import numpy.matlib
+from numpy import kron
+
 
 def lm(columns, n):
     """
@@ -61,8 +63,9 @@ def stp(a, b):
 
     return sp
 
-def swapM(m, n):
+def swapM(*args):
     """
+    OLD BELOW IS THE BETTER ONE
     DESCRIPTION:
     A function that creates a swap matrix provided the dimensions for the indexes. Adapted from the one found in
     Analysis and Control of Boolean Networks.
@@ -72,6 +75,8 @@ def swapM(m, n):
     """
 
     # Parameters
+    m = args[0]
+    n = args[1] if len(args) > 1 else args[0]
     d = m*n
     w = np.zeros((d, d), dtype=int)
 
@@ -234,6 +239,7 @@ def swapVarsByOrder(vars, f, logic):
     f1 = [item for sublist in [f1, [0 for i in range(0, n)], f] for item in sublist]
     return vars1, f1
 
+
 def stdform(expr, options):
     """
     DESCRIPTION:
@@ -259,6 +265,7 @@ def stdform(expr, options):
     vars = [vars[pos] for pos in positions]
     return lm, vars
 
+
 def stpn(matrices):
     """
     DESCRIPTION:
@@ -266,22 +273,89 @@ def stpn(matrices):
     :param matrices: [list] a list of matrices to be multiplied.
     :return: [numpy array] the result of the operations.
     """
-    matrices.reverse()
-    load = [matrices[0]]
-    [load.append(stp(matrix, load[-1])) for matrix in matrices[1::]]
+    load = matrices
+    if len(matrices) > 1:
+        matrices.reverse()
+        load = [matrices[0]]
+        [load.append(stp(matrix, load[-1])) for matrix in matrices[1::]]
     return load[-1]
+
+
+def leye(n):
+    """
+    DESCRIPTION:
+    A function to generate an identity matrix of nxn size.
+    :param n: [int] dimensions number.
+    :return: [numpy array] identity matrix.
+    """
+    return np.eye(n)
+
+def leye(n):
+    """
+    DESCRIPTION:
+    A function to generate an equivalence matrix of nxn size.
+    :param n: [int] dimensions number.
+    :return: [numpy array] identity matrix.
+    """
+    return np.eye(n)
+
+def lwij(*args):
+    """
+    DESCRIPTION:
+    A function that creates a swap matrix provided the dimensions for the indexes. Adapted from the one found in
+    STP toolbox by Daizhan Cheng.
+    :param args: [int] dimensions.
+    :return: [numpy array] the swap matrix.
+    """
+    if len(args) == 1:
+        m = args[0]
+        n = m
+    else:
+        m = args[0]
+        n = args[1]
+    columns = np.eye(m*n)
+    arrays = [np.array(range(1, m+1)) for k in range(0, n)]
+    value = np.stack(arrays)
+    value = value.flatten('F')
+    i = np.transpose(value)
+    j = numpy.matlib.repmat(np.array(range(1, n+1)), 1, m)[0, :]
+    result = i + (j - 1)*m - 1
+    arrays = [columns[:, i] for i in result]
+    result = np.stack(arrays, 1)
+    return result
+
 
 def matrix_eval(expr, variables):
     """
     DESCRIPTION:
     This function is devised to work in 2-based logic. That is the reason why we only gather a dictionary of pre-built
     functions.
+
     Dictionary:
     leye: logic identity matrix.
     MN: negation matrix.
     MC: conjunction matrix.
     MD: disjunction matrix.
+
+    Operations:
+    +: addition
+    -: subtraction
+    *: multiplication (STP)
     """
+    # Auxiliary functions
+    def expr_calc(expr):
+        # Prepare the arguments
+        args = expr[5:-1]
+        if '^' in args:
+            args = '**'.join(args.split('^'))
+        args = eval(args)
+        # Prepare the fucntion
+        fun_name = expr[0:4]
+        fun = globals()[fun_name]
+        # Return the value
+        value = fun(args)
+        return value
+
     # Identity matrix
     leye = np.array([[1, 0], [0, 1]])
     # Negation matrix
@@ -290,8 +364,139 @@ def matrix_eval(expr, variables):
     MC = np.array([[1, 0, 0, 0], [0, 1, 1, 1]])
     # Disjunction matrix
     MD = np.array([[1, 1, 1, 0], [0, 0, 0, 1]])
+    # Equivalence matrix
+    # Implication matrix
+    # Power reducing matrix
+    MR = np.array([[1, 0], [0, 0], [0, 0], [0, 1]])
+    # XOR matrix
 
-    return 3
+    # Dictionary
+    sym = {'MN': MN, 'MC': MC, 'MD': MD, 'leye': leye, 'MR': MR}
+    # Tags
+    tags = ['leye', 'lwij']
+
+    # Introduce the substitution of the parenthesis by the keyword LOAD. Process the string
+    loads_positions = []
+    pos_open = [letter[0] for letter in enumerate(expr) if letter[1] == '(']
+    pos_closed = [letter[0] for letter in enumerate(expr) if letter[1] == ')']
+    for pos_c in pos_closed:
+        pos_o = []
+        i = 0
+        while i < len(pos_open):
+            pos = [pos_o for pos_o in pos_open if pos_o < pos_c]
+            if len(pos) == 0:
+                break
+            pos = pos[-1]
+            if pos_open[i] == pos:
+                pos_o = pos_open.pop(i)
+                i += -1
+            i += 1
+        loads_positions.append((pos_o, pos_c))
+
+    # Filtering of function parenthesis
+    operations = []
+    for pos in loads_positions[:]:
+        tag = expr[pos[0]-4:pos[0]]
+        if tag in tags:
+            pos = (pos[0] - 4, pos[1])  # Needed to reutilization of code
+            # Ensure that we are not inside any $LOAD$
+            condition = [True if pos[0] > l_pos[0] and pos[1] < l_pos[1] else False for l_pos in loads_positions]
+            if not any(condition):
+                operations.append(pos)
+
+    # Make new expression with $OP$
+    op_values = [expr_calc(expr[pos[0]: pos[1] + 1]) for pos in operations]
+    first_signal = '$OP$'
+    if len(operations) > 0:
+        new_expr = expr[0:operations[0][0]] + first_signal
+        if len(operations) == 1:
+            new_expr = new_expr + expr[operations[0][1] + 1::]
+        for i in range(1, len(operations)):
+            first = expr[operations[i - 1][1] + 1: operations[i][0]]
+            if i == len(operations) - 1:
+                new_expr = new_expr + first + first_signal + expr[operations[i][1] + 1::]
+                break
+            new_expr = new_expr + first + first_signal
+        expr = new_expr
+
+    # Recalculate the positions
+    loads_positions = []
+    pos_open = [letter[0] for letter in enumerate(expr) if letter[1] == '(']
+    pos_closed = [letter[0] for letter in enumerate(expr) if letter[1] == ')']
+    for pos_c in pos_closed:
+        pos_o = []
+        i = 0
+        while i < len(pos_open):
+            pos = [pos_o for pos_o in pos_open if pos_o < pos_c]
+            if len(pos) == 0:
+                break
+            pos = pos[-1]
+            if pos_open[i] == pos:
+                pos_o = pos_open.pop(i)
+                i += -1
+            i += 1
+        loads_positions.append((pos_o, pos_c))
+
+    # Filtering of embedded parenthesis
+    emb_poss = []
+    for pos in loads_positions:
+        for i in range(0, len(loads_positions)):
+            i_pos = loads_positions[i]
+            if i_pos[0] < pos[0] and i_pos[1] > pos[1]:
+                emb_poss.append(pos)
+    positions = [pos for pos in loads_positions if pos not in emb_poss]
+
+    # Make new expression with $LOAD$
+    chunks = [expr[pos[0]+1:pos[1]] for pos in positions]
+    second_signal = '$LOAD$'
+    if len(positions) > 0:
+        new_expr = expr[0:positions[0][0]] + second_signal
+        if len(positions) == 1:
+            new_expr = new_expr + expr[positions[0][1] + 1::]
+        for i in range(1, len(positions)):
+            first = expr[positions[i - 1][1] + 1: positions[i][0]]
+            if i == len(positions) - 1:
+                new_expr = new_expr + first + second_signal + expr[positions[i][1] + 1::]
+                break
+            new_expr = new_expr + first + second_signal
+        expr = new_expr
+
+    # Obtain the value of the parenthesis
+    chunk_values = []
+    for chunk in chunks:
+        chunk_values.append(matrix_eval(chunk, variables))
+
+    # Perform the operation
+    r_pos = [i for i in range(0, len(expr)) if expr[i] == '-']
+    s_pos = [i for i in range(0, len(expr)) if expr[i] == '+']
+    sr_list = re.split('\+|\-', expr)
+    results = []
+    count = 0
+    op_count = 0
+    for cluster in sr_list:
+        cluster = cluster.split('*')
+        matrices = []
+        for m in cluster:
+            if m != second_signal and m != first_signal:
+                matrices.append(sym[m])
+            elif m == second_signal:
+                matrices.append(chunk_values[count])
+                count += 1
+            else:
+                matrices.append(op_values[op_count])
+                op_count += 1
+
+        results.append(stpn(matrices))
+    result = results[0]
+    for i in range(1, len(results)):
+        m_r = min(r_pos) if len(r_pos) > 0 else max(s_pos) + 1
+        m_s = min(s_pos) if len(s_pos) > 0 else max(r_pos) + 1
+        if 0 < m_s < m_r:
+            result = kron(result, results[i])
+            s_pos.pop(s_pos.index(m_s))
+        elif m_s > m_r > 0:
+            raise ValueError
+    return result
 
 
 def lGen(net, graph):
@@ -306,6 +511,7 @@ def lGen(net, graph):
     leye: logic identity matrix.
     MN: negation matrix.
     """
+
     # Iterate through the net
     for i in range(0, len(net)):
         # Set the structure of an INPUT node
@@ -326,6 +532,7 @@ def lGen(net, graph):
             step = ms + step
             load = ' '.join(step) + ' ' + load
         net[i] = load[0:len(load)-1]
+
     # Create the matrix from the string
     expr = ' '.join(net)
     options = list(graph.index)

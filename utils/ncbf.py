@@ -313,7 +313,8 @@ def netValidator(networks, graph, attractors):
     :return: a flag saying if the condition is met (True) or not (False).
     """
     for net in networks:
+        l = lGen(net, graph)
+        np.savetxt('l_matrix.txt', l, fmt='%.0f')
         for attractor in attractors:
-            l = lGen(net, graph)
-
+            pass
 
