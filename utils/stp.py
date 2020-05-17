@@ -148,10 +148,10 @@ def PR_Swap(vars, f, logic):
                 v = [idx[0] + 1 for idx in enumerate(f) if idx[1] == i]
                 continue
             elif not any(chunk):
-                vars[v[j-2]] = convertKP(convertSP(vars[v[j-2]:v[j-1]-1]), logic)
+                vars[v[j-2]-1] = convertKP(convertSP(vars[v[j-2]:v[j-1]-1]), logic)
                 f[v[j-2]-1: v[j-2] + 1] = [0 for item in f[v[j-2]-1: v[j-2] + 1]]
                 vars[v[j - 2]] = 'MR'
-                k = range(v[j - 2] + 1, v[j-1] - 1, 1)
+                k = range(v[j - 2] + 2, v[j-1], 1)  # BEWARE here
                 positions = [u for u in range(0, len(f)) if u not in [c - 1 for c in k]]
                 f = [f[pos] for pos in positions]
                 vars = [vars[pos] for pos in positions]
@@ -249,9 +249,11 @@ def stdform(expr, options):
     """
     vars = expr.split(' ')
     f = [0 if var not in options else options.index(var) + 1 for var in vars]
+    """
     vars = ['MN', 'MD', 'C', 'F', 'A', 'B', 'MC', 'MC', 'MN', 'I', 'MN', 'C', 'MN', 'F', 'D', 'E', 'MN', 'MD', 'F', 'I',
             'G', 'H']
     f = [0, 0, 3, 6, 1, 2, 0, 0, 0, 9, 0, 3, 0, 6, 4, 5, 0, 0, 6, 9, 7, 8]
+    """
     # Set logic to 2 because we are in 2-based logic.
     vars, f = PR_Swap(vars, f, logic=2)
     vars, f = moveVarBack(vars, f, logic=2)
@@ -478,7 +480,10 @@ def matrix_eval(expr, variables):
         matrices = []
         for m in cluster:
             if m != second_signal and m != first_signal:
-                matrices.append(sym[m])
+                try:
+                    matrices.append(sym[m])
+                except:
+                    pass
             elif m == second_signal:
                 matrices.append(chunk_values[count])
                 count += 1
@@ -516,23 +521,44 @@ def lGen(net, graph):
     for i in range(0, len(net)):
         # Set the structure of an INPUT node
         if net[i] == 'INPUT':
-            net[i] = f'Meye {graph.index[i]}'
+            net[i] = f'{graph.index[i]}'
             continue
         # Iterate through the layers of a node
         load = ''
         steps = range(len(net[i])-1, -1, -1)
         m_step = min(steps)
-        first_letter = list(net[i][m_step])
+        first_letter = list(net[i][m_step])[0]
         for j in steps:
-            # Create the structure string
-            step = [item for sublist in [['MN', letter] for letter in list(net[i][j])] for item in sublist]
-            ms = ['MN']
-            if j == m_step and first_letter[0] not in graph.iloc[i]['activators']:
-                ms = ['leye']
-            step = ms + step
-            load = ' '.join(step) + ' ' + load
+            layer = list(reversed(net[i][j]))
+            # Assess if we are in the outer node or in the deepest
+            ms = 'MN'
+            if j == m_step and first_letter in graph.iloc[i]['activators']:
+                header = ms
+                if len(steps) != 1:
+                    header += ' ' + 'MC'
+            elif j == m_step and first_letter in graph.iloc[i]['inhibitors']:
+                header = ''
+                if len(steps) != 1:
+                    header += 'MC'
+            else:
+                if j == max(steps):
+                    header = ms
+                else:
+                    header = ms + ' ' + 'MC'
+            # Calculate the whole load
+            if len(layer) == 1:
+                level = 'MN' + ' ' + layer[0]
+            else:
+                level = 'MN' + ' ' + layer[0]
+                for letter in layer[1::]:
+                    level = 'MC' + ' ' + 'MN' + ' ' + letter + ' ' + level
+            # Add inner load
+            level = level + ' ' + load
+            # Add the header
+            load = header + ' ' + level
+            pass
         net[i] = load[0:len(load)-1]
-
+    net = ['I', 'MN MC MN I MN MN C', 'MN MC MN A MN MN D', 'MN MN B', 'MN MC MN B MN MC MN A MN MN C']
     # Create the matrix from the string
     expr = ' '.join(net)
     options = list(graph.index)

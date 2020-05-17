@@ -23,7 +23,7 @@ def main():
     networks = list(networksCalc(paths))
 
     # Return the set of networks which meet the condition
-    attractors = [[0, 0, 0, 0, 0]]
+    attractors = [[1, 1, 1, 1, 1]]
     networks = netValidator(networks, data, attractors)
 
 if __name__ == '__main__':

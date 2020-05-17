@@ -12,6 +12,7 @@ from random import choice
 import pandas as pd
 import numpy as np
 from utils.stp import lGen
+from utils.stp import stpn, stp
 
 
 def get_level(tree, path, level):
@@ -308,13 +309,25 @@ def networksCalc(paths, path=None, index=0):
 def netValidator(networks, graph, attractors):
     """
     DESCRIPTION:
-    Given a function and an attractor, it is returned whether the function meets the attractor condition or not.
-    :param fun: NCBF to be validated with the structure of Murrugarra 2013.
-    :return: a flag saying if the condition is met (True) or not (False).
+    Given a function and an attractor, it is returned whether the function meets the attractors condition or not.
+    :param networks: [list] NCBFs to be validated with the structure of Murrugarra 2013.
+    :param graph: [pandas dataframe] graph from which come the networks in the structure set in previous stages.
+    :return: [list] networks that have passed the validation.
     """
+    # Prepare the attractors
+    t = np.array([[1], [0]])
+    f = np.array([[0], [1]])
+    for i in range(0, len(attractors[:])):
+        attractors[i] = stpn([t if num == 1 else f for num in attractors[i]])
+
+    # Execute the validation
+    final_networks = []
     for net in networks:
         l = lGen(net, graph)
-        np.savetxt('l_matrix.txt', l, fmt='%.0f')
-        for attractor in attractors:
-            pass
+        validation = all([True if all(attractor == stp(l, attractor)) else False for attractor in attractors])
+        if validation:
+            final_networks.append(net)
+
+    return final_networks
+
 
