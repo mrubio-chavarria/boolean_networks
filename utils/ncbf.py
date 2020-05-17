@@ -76,10 +76,10 @@ def auxiliar_function(groupA, groupB, n, path=None):
     # Parameters to assess the path
     n_A = groupA[-1]
     n_B = groupB[-1]
-    if path:
-        if len(path)%2 == 0:
+    if path is not None:
+        if len(path) % 2 != 0:
             # Last layer A, add B
-            for el_B2 in groupB:
+            for el_B2 in groupB[:]:
                 pathB2 = path + [el_B2]
                 valB = np.sum(pathB2)
                 if valB == n:
@@ -94,7 +94,7 @@ def auxiliar_function(groupA, groupB, n, path=None):
                     yield from auxiliar_function(groupA, groupB, n, path=pathB2)
         else:
             # Last layer B, add A
-            for el_A2 in groupA:
+            for el_A2 in groupA[:]:
                 pathA2 = path + [el_A2]
                 valA = np.sum(pathA2)
                 if valA == n:
@@ -109,19 +109,18 @@ def auxiliar_function(groupA, groupB, n, path=None):
                     yield from auxiliar_function(groupA, groupB, n, path=pathA2)
     else:
         # Start with a layer of A
-        for el_A1 in groupA:
-            pathA1 = [el_A1]
-            yield from auxiliar_function(groupA, groupB, n, path=pathA1)
+        for el_A1 in groupA[:]:
+            yield from auxiliar_function(groupA, groupB, n, path=[el_A1])
 
 def structsCalc(groupA, groupB, n):
     """
     DESCRIPTION:
     A function that achieves all the combinations of numbers from 0 to groupA, and from 0 to groupB in an iterative way
     and each row sums n.
-    :param groupA: number of elements in the first group.
-    :param groupB: number of elements in the second group.
-    :param n: total value by group.
-    :return: list of possible structures.
+    :param groupA: [int] number of elements in the first group.
+    :param groupB: [int] number of elements in the second group.
+    :param n: [int] total value by group.
+    :return: [list] all possible structures.
     """
     groupA = np.linspace(1, groupA, groupA)
     groupB = np.linspace(1, groupB, groupB)
@@ -282,7 +281,7 @@ def networksCalc(paths, path=None, index=0):
     :return: the network. Due to the fact that we have a generator, it will be a list of objects.
     """
     if path is not None:
-        if index%2 == 0:
+        if index % 2 == 0:
             for step in paths.iloc[index]:
                 path_second = path[:] + [step]
                 index_second_A = index + 1

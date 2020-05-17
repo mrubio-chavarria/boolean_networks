@@ -11,9 +11,9 @@ from utils.ncbf import ncbfCalc, networksCalc, netValidator
 def main():
 
     # Build the input object
-    index = np.array(['I', 'A', 'B', 'C', 'D'])
-    columns = np.array(['activators', 'inhibitors'])
-    data = np.array([[[''], ['']], [['I'], ['C']], [['A'], ['D']], [['B'], ['']], [['B', 'C'], ['A']]])
+    index = ['A', 'B', 'C', 'D']
+    columns = ['activators', 'inhibitors']
+    data = [[['D'], ['']], [['A'], ['B', 'C']], [['B', 'C'], ['A']], [['B'], ['C']]]
     data = pd.DataFrame(data=data, index=index, columns=columns)
 
     # Get another DataFrame with all the possible ncbf. TO BE IMPROVED.
@@ -23,7 +23,7 @@ def main():
     networks = list(networksCalc(paths))
 
     # Return the set of networks which meet the condition
-    attractors = [[1, 1, 1, 1, 1]]
+    attractors = [[0, 0, 1, 0], [1, 1, 0, 1]]
     networks = netValidator(networks, data, attractors)
 
 if __name__ == '__main__':

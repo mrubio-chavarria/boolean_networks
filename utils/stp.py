@@ -249,11 +249,6 @@ def stdform(expr, options):
     """
     vars = expr.split(' ')
     f = [0 if var not in options else options.index(var) + 1 for var in vars]
-    """
-    vars = ['MN', 'MD', 'C', 'F', 'A', 'B', 'MC', 'MC', 'MN', 'I', 'MN', 'C', 'MN', 'F', 'D', 'E', 'MN', 'MD', 'F', 'I',
-            'G', 'H']
-    f = [0, 0, 3, 6, 1, 2, 0, 0, 0, 9, 0, 3, 0, 6, 4, 5, 0, 0, 6, 9, 7, 8]
-    """
     # Set logic to 2 because we are in 2-based logic.
     vars, f = PR_Swap(vars, f, logic=2)
     vars, f = moveVarBack(vars, f, logic=2)
@@ -480,10 +475,7 @@ def matrix_eval(expr, variables):
         matrices = []
         for m in cluster:
             if m != second_signal and m != first_signal:
-                try:
-                    matrices.append(sym[m])
-                except:
-                    pass
+                matrices.append(sym[m])
             elif m == second_signal:
                 matrices.append(chunk_values[count])
                 count += 1
@@ -557,8 +549,10 @@ def lGen(net, graph):
             # Add the header
             load = header + ' ' + level
             pass
-        net[i] = load[0:len(load)-1]
-    net = ['I', 'MN MC MN I MN MN C', 'MN MC MN A MN MN D', 'MN MN B', 'MN MC MN B MN MC MN A MN MN C']
+        node = load[0:len(load)-1].split(' ')
+        if '' in node:
+            node.pop(node.index(''))
+        net[i] = ' '.join(node)
     # Create the matrix from the string
     expr = ' '.join(net)
     options = list(graph.index)
