@@ -321,58 +321,7 @@ def lwij(*args):
     result = np.stack(arrays, 1)
     return result
 
-
-def matrix_eval(expr, variables):
-    """
-    DESCRIPTION:
-    This function is devised to work in 2-based logic. That is the reason why we only gather a dictionary of pre-built
-    functions.
-
-    Dictionary:
-    leye: logic identity matrix.
-    MN: negation matrix.
-    MC: conjunction matrix.
-    MD: disjunction matrix.
-
-    Operations:
-    +: addition
-    -: subtraction
-    *: multiplication (STP)
-    """
-    # Auxiliary functions
-    def expr_calc(expr):
-        # Prepare the arguments
-        args = expr[5:-1]
-        if '^' in args:
-            args = '**'.join(args.split('^'))
-        args = eval(args)
-        # Prepare the fucntion
-        fun_name = expr[0:4]
-        fun = globals()[fun_name]
-        # Return the value
-        value = fun(args)
-        return value
-
-    # Identity matrix
-    leye = np.array([[1, 0], [0, 1]])
-    # Negation matrix
-    MN = np.array([[0, 1], [1, 0]])
-    # Conjunction matrix
-    MC = np.array([[1, 0, 0, 0], [0, 1, 1, 1]])
-    # Disjunction matrix
-    MD = np.array([[1, 1, 1, 0], [0, 0, 0, 1]])
-    # Equivalence matrix
-    # Implication matrix
-    # Power reducing matrix
-    MR = np.array([[1, 0], [0, 0], [0, 0], [0, 1]])
-    # XOR matrix
-
-    # Dictionary
-    sym = {'MN': MN, 'MC': MC, 'MD': MD, 'leye': leye, 'MR': MR}
-    # Tags
-    tags = ['leye', 'lwij']
-
-    # Introduce the substitution of the parenthesis by the keyword LOAD. Process the string
+def detect_load(expr):
     loads_positions = []
     pos_open = [letter[0] for letter in enumerate(expr) if letter[1] == '(']
     pos_closed = [letter[0] for letter in enumerate(expr) if letter[1] == ')']
@@ -389,52 +338,29 @@ def matrix_eval(expr, variables):
                 i += -1
             i += 1
         loads_positions.append((pos_o, pos_c))
+    return loads_positions
 
-    # Filtering of function parenthesis
+
+def parenthesis_filter(loads_positions, expr, tags):
     operations = []
     for pos in loads_positions[:]:
-        tag = expr[pos[0]-4:pos[0]]
+        tag = expr[pos[0] - 4:pos[0]]
         if tag in tags:
-            pos = (pos[0] - 4, pos[1])  # Needed to reutilization of code
+            new_pos = (pos[0] - 4, pos[1])  # Needed to reutilization of code
             # Ensure that we are not inside any $LOAD$
             condition = [True if pos[0] > l_pos[0] and pos[1] < l_pos[1] else False for l_pos in loads_positions]
             if not any(condition):
-                operations.append(pos)
+                condition = [True if pos[0] < l_pos[0] and pos[1] > l_pos[1] else False for l_pos in loads_positions]
+                if not any(condition):
+                    operations.append(new_pos)
+    return operations
 
-    # Make new expression with $OP$
-    op_values = [expr_calc(expr[pos[0]: pos[1] + 1]) for pos in operations]
-    first_signal = '$OP$'
-    if len(operations) > 0:
-        new_expr = expr[0:operations[0][0]] + first_signal
-        if len(operations) == 1:
-            new_expr = new_expr + expr[operations[0][1] + 1::]
-        for i in range(1, len(operations)):
-            first = expr[operations[i - 1][1] + 1: operations[i][0]]
-            if i == len(operations) - 1:
-                new_expr = new_expr + first + first_signal + expr[operations[i][1] + 1::]
-                break
-            new_expr = new_expr + first + first_signal
-        expr = new_expr
 
-    # Recalculate the positions
-    loads_positions = []
-    pos_open = [letter[0] for letter in enumerate(expr) if letter[1] == '(']
-    pos_closed = [letter[0] for letter in enumerate(expr) if letter[1] == ')']
-    for pos_c in pos_closed:
-        pos_o = []
-        i = 0
-        while i < len(pos_open):
-            pos = [pos_o for pos_o in pos_open if pos_o < pos_c]
-            if len(pos) == 0:
-                break
-            pos = pos[-1]
-            if pos_open[i] == pos:
-                pos_o = pos_open.pop(i)
-                i += -1
-            i += 1
-        loads_positions.append((pos_o, pos_c))
-
-    # Filtering of embedded parenthesis
+def embedded_filter(loads_positions):
+    """
+    DESCRIPTION:
+    The aim of this function is to return the values of parenthesis which are not embedded in others parenthesis.
+    """
     emb_poss = []
     for pos in loads_positions:
         for i in range(0, len(loads_positions)):
@@ -442,10 +368,24 @@ def matrix_eval(expr, variables):
             if i_pos[0] < pos[0] and i_pos[1] > pos[1]:
                 emb_poss.append(pos)
     positions = [pos for pos in loads_positions if pos not in emb_poss]
+    return positions
 
-    # Make new expression with $LOAD$
-    chunks = [expr[pos[0]+1:pos[1]] for pos in positions]
-    second_signal = '$LOAD$'
+def expr_calc(expr):
+    # Prepare the arguments
+    args = expr[5:-1]
+    if '^' in args:
+        args = '**'.join(args.split('^'))
+    args = eval(args)
+    # Prepare the fucntion
+    fun_name = expr[0:4]
+    fun = globals()[fun_name]
+    # Return the value
+    value = fun(args)
+    return value
+
+
+def key2load(expr, positions, first_signal, second_signal):
+    chunks = [expr[pos[0] + 1:pos[1]] for pos in positions]
     if len(positions) > 0:
         new_expr = expr[0:positions[0][0]] + second_signal
         if len(positions) == 1:
@@ -457,13 +397,25 @@ def matrix_eval(expr, variables):
                 break
             new_expr = new_expr + first + second_signal
         expr = new_expr
+    return expr, chunks
 
-    # Obtain the value of the parenthesis
-    chunk_values = []
-    for chunk in chunks:
-        chunk_values.append(matrix_eval(chunk, variables))
+def key2op(expr, operations, signal):
+    op_values = [expr_calc(expr[pos[0]: pos[1] + 1]) for pos in operations]
+    if len(operations) > 0:
+        new_expr = expr[0:operations[0][0]] + signal
+        if len(operations) == 1:
+            new_expr = new_expr + expr[operations[0][1] + 1::]
+        for i in range(1, len(operations)):
+            first = expr[operations[i - 1][1] + 1: operations[i][0]]
+            if i == len(operations) - 1:
+                new_expr = new_expr + first + signal + expr[operations[i][1] + 1::]
+                break
+            new_expr = new_expr + first + signal
+        expr = new_expr
+    return expr, op_values
 
-    # Perform the operation
+
+def matrix_calc(expr, first_signal, second_signal, op_values, chunk_values, sym):
     r_pos = [i for i in range(0, len(expr)) if expr[i] == '-']
     s_pos = [i for i in range(0, len(expr)) if expr[i] == '+']
     sr_list = re.split('\+|\-', expr)
@@ -493,6 +445,73 @@ def matrix_eval(expr, variables):
             s_pos.pop(s_pos.index(m_s))
         elif m_s > m_r > 0:
             raise ValueError
+    return result
+
+
+def matrix_eval(expr, variables):
+    """
+    DESCRIPTION:
+    This function is devised to work in 2-based logic. That is the reason why we only gather a dictionary of pre-built
+    functions.
+
+    Dictionary:
+    leye: logic identity matrix.
+    MN: negation matrix.
+    MC: conjunction matrix.
+    MD: disjunction matrix.
+
+    Operations:
+    +: addition
+    -: subtraction
+    *: multiplication (STP)
+    """
+
+    # Identity matrix
+    leye = np.array([[1, 0], [0, 1]])
+    # Negation matrix
+    MN = np.array([[0, 1], [1, 0]])
+    # Conjunction matrix
+    MC = np.array([[1, 0, 0, 0], [0, 1, 1, 1]])
+    # Disjunction matrix
+    MD = np.array([[1, 1, 1, 0], [0, 0, 0, 1]])
+    # Equivalence matrix
+    # Implication matrix
+    # Power reducing matrix
+    MR = np.array([[1, 0], [0, 0], [0, 0], [0, 1]])
+    # XOR matrix
+
+    # Dictionary
+    sym = {'MN': MN, 'MC': MC, 'MD': MD, 'leye': leye, 'MR': MR}
+    # Tags
+    tags = ['leye', 'lwij']
+
+    # Catch the parenthesis by the keyword LOAD. Process the string
+    loads_positions = detect_load(expr)
+
+    # Filtering of function parenthesis
+    operations = parenthesis_filter(loads_positions, expr, tags)
+
+    # Change the parenthesis by the keyword OP
+    first_signal = '$OP$'
+    expr, op_values = key2op(expr, operations, first_signal)
+
+    # Recalculate the positions
+    loads_positions = detect_load(expr)
+
+    # Filtering of embedded parenthesis
+    positions = embedded_filter(loads_positions)
+
+    # Make new expression with $LOAD$
+    second_signal = '$LOAD$'
+    expr, chunks = key2load(expr, positions, first_signal, second_signal)
+
+    # Obtain the value of the parenthesis
+    chunk_values = []
+    for chunk in chunks:
+        chunk_values.append(matrix_eval(chunk, variables))
+
+    # Perform the operation
+    result = matrix_calc(expr, first_signal, second_signal, op_values, chunk_values, sym)
     return result
 
 

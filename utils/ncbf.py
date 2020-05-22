@@ -4,15 +4,16 @@ INDICATIONS:
 In this file, they are given several utilities to the calculation of nested canalizing boolean functions
 (boolean_networks).
 """
-
+import sys
 from itertools import combinations, permutations, product
 from functools import reduce
 from operator import add
 from random import choice
 import pandas as pd
 import numpy as np
-from utils.stp import lGen
-from utils.stp import stpn, stp
+from utils.stp import stpn
+from PyBoolNet import Repository, StateTransitionGraphs, Attractors, FileExchange
+import itertools
 
 
 def get_level(tree, path, level):
@@ -128,17 +129,17 @@ def structsCalc(groupA, groupB, n):
     selectedB = list(auxiliar_function(groupB, groupA, n))
     return [selectedA, selectedB]
 
-def pathCalc(row):
+def pathCalc(row, tags):
     """
     DESCRIPTION:
     A function to calculate a path in the tree of functions
-    :param row: a row of the networks table. Activators and inhibitors.
+    :param row: a row of the networks table. Group 1 and 2 (Activators and inhibitors).
     :return: a list with all possible functions which meet with the row element.
     """
 
     # Parameters
-    act = row.loc['activators'] or []
-    inh = row.loc['inhibitors'] or []
+    act = row.loc[tags[0]] or []
+    inh = row.loc[tags[1]] or []
     e_act = len(act)
     e_inh = len(inh)
     p_total = e_act + e_inh
@@ -255,7 +256,8 @@ def pathCalc(row):
 
     return paths
 
-def ncbfCalc(data):
+
+def ncbfCalc(data, tags):
     """
     DESCRIPTION:
     With this function, given a graph, we obtain all the possible NCBFs.
@@ -266,11 +268,52 @@ def ncbfCalc(data):
     paths = []
     for index, row in data.iterrows():
         # Obtain the number of possible layers
-        paths.append(pathCalc(row=row))
+        paths.append(pathCalc(row=row, tags=tags))
 
     # Build the response dataframe
     paths = pd.Series(data=paths, index=data.index)
     return paths
+
+def conflict_ncbfCalc(variables, tag):
+    """
+    DESCRIPTION:
+    It does the same as the function above but with all possible combinations in groups of the given variables.
+    :param variables: a dataframe with the variables of the network. One row per node.
+    :return: all possible NCBF for each gene according with the structure presented in Murrugarra 2013 for NCBF.
+    """
+    # Auxiliary functions
+    def aux_i(node):
+        params = variables.loc[node, tag]
+        for i in range(0, len(params) + 1):
+            yield itertools.combinations(params, i)
+
+    # Parameters
+    nodes = variables.index
+
+    # Base dataframe
+    index = nodes
+    columns = ['activators', 'inhibitors']
+
+    # Make all combinations
+    all_combs = []
+    for node in nodes:
+        combs = [item for sublist in list(aux_i(node)) for item in sublist]
+        combs = [comb for comb in list(itertools.product(combs, repeat=2))
+                 if len(comb[0] + comb[1]) == len(variables.loc[node, tag])
+                 if not any([True if element in comb[1] else False for element in comb[0]])]
+        combs = [[group if len(group) > 0 else [''] for group in comb] for comb in combs]
+        all_combs.append(combs)
+    all_combs = itertools.product(*all_combs)
+    base = lambda x: pd.DataFrame(data=x, index=index, columns=columns)
+    frames = list(map(base, all_combs))
+
+    # Build the paths
+    all_paths = []
+    for frame in frames:
+        paths = ncbfCalc(frame, columns)
+        all_paths.append(paths)
+
+    return all_paths, frames
 
 def networksCalc(paths, path=None, index=0):
     """
@@ -304,8 +347,178 @@ def networksCalc(paths, path=None, index=0):
             index_first = index + 1
             yield from networksCalc(paths, path=path_first, index=index_first)
 
+def conflict_net2boolnet(net, graph, tags, groups=None):
+    """
+    DESCRIPTION:
+    """
 
-def netValidator(networks, graph, attractors):
+    # Auxiliary functions
+    def aux_I():
+        for node in groups.keys():
+            group1 = groups[node][list(groups[node].keys())[0]]
+            group1 = group1 if len(group1) > 0 else [()]
+            group2 = groups[node][list(groups[node].keys())[1]]
+            group2 = group2 if len(group2) > 0 else [()]
+            new_groups = list(itertools.product(group1, group2, repeat=1))
+            for group in new_groups:
+                expr = network[node]
+                variables = [item for sublist in group for item in sublist]
+                # Due to the properties of the NCBF we can assume that there will not be any variable twice
+                positions = [expr.index(variable[0]) for variable in variables if variable[0] in expr]
+                i = 0
+                while i < len(expr):
+                    if i in positions:
+                        p = positions.index(i)
+                        value = variables[p][1]
+                        variables.pop(p)
+                        positions.pop(p)
+                        if value == 0:
+                            expr = expr[0:i - 1] + expr[i::]
+                            positions = [pos - 1 for pos in positions if pos > i]
+                            i += -1
+                    i += 1
+                yield node, expr
+
+    def aux_II(groups, counts):
+        """
+        DESCRIPTION:
+        A function to perform an absolutely customized cartesian product.
+        """
+        selections = [combinations(g, c) for g, c in zip(groups, counts)]
+        for n_tuple in product(*selections):
+            yield tuple(itertools.chain.from_iterable(n_tuple))
+
+    # Parameters
+    activators = graph[tags[0]]
+    tags = list(graph.index)
+    network = {}
+
+    # Section to manage the original nodes
+    for i in range(0, len(net)):
+        node = net[i]
+        header = ''
+        tail = ''
+        if node == 'INPUT':
+            network[tags[i]] = tags[i]
+            continue
+        if node[0][0] in activators[tags[i]]:
+            header = '!('
+            tail = ')'
+        last = True
+        load = ''
+        for layer in reversed(node):
+            if last:
+                load = '&'.join(list(map(lambda x: '!' + x, layer)))
+                last = False
+                continue
+            local_load = '&'.join(list(map(lambda x: '!' + x, layer)))
+            load = f'{local_load}&!({load})'
+        node = header + load + tail
+        network[tags[i]] = node
+
+    # Section to tackle the conflict nodes
+    if groups is not None:
+        combs = list(aux_I())
+        groups = {key: [] for key in tags}
+        list(map(lambda x: groups[x[0]].append(x[1]), combs))
+        groups = [groups[key] for key in groups.keys()]
+        counts = [1] * len(groups)
+        combs = list(aux_II(groups, counts))
+        for comb in combs:
+            network = {tags[i]: comb[i] for i in range(0, len(tags))}
+            yield network
+
+def net2boolnet(net, graph, tags):
+    """
+    DESCRIPTION:
+    A function to parse the incoming network to a Boolnet format in string. The network to be taken by PyBoolNet.
+    :param net: [list] the network in our format.
+    :return: [string] the network in Boolnet format.
+    """
+
+    # Parameters
+    activators = graph[tags[0]]
+    tags = list(graph.index)
+    network = {}
+
+    # Section to manage the original nodes
+    for i in range(0, len(net)):
+        node = net[i]
+        header = ''
+        tail = ''
+        if node == 'INPUT':
+            network[tags[i]] = tags[i]
+            continue
+        if node[0][0] in activators[tags[i]]:
+            header = '!('
+            tail = ')'
+        last = True
+        load = ''
+        for layer in reversed(node):
+            if last:
+                load = '&'.join(list(map(lambda x: '!' + x, layer)))
+                last = False
+                continue
+            local_load = '&'.join(list(map(lambda x: '!' + x, layer)))
+            load = f'{local_load}&!({load})'
+        node = header + load + tail
+        network[tags[i]] = node
+
+    network = '\n'.join([f'{item[0]}, {item[1]}' for item in network.items()])
+    return network
+
+
+def net2file(net, filename):
+    """
+    DESCRIPTION:
+    A function to store the dict with the network in a file with boolnet format.
+    :param net: [dict] network in boolnet format.
+    :return: None.
+    """
+    file = open(filename, 'w')
+    message = '\n'.join([f'{item[0]}, {item[1]}' for item in net.items()])
+    file.write(message)
+    file.close()
+    return filename
+
+
+def conflicts_manager(net, conflicts_networks, conflicts_graph, tags):
+    """
+    DESCRIPTION:
+    A function to introduce the expressions of the conflicts in the complete network.
+    """
+    # Get all possible combinations
+    groups = {node: {column: 1 for column in tags} for node in conflicts_graph.index}
+    for node in conflicts_graph.index:
+        for column in tags:
+            local_groups = [item for sublist in [[(letter, 1), (letter, 0)] for letter in conflicts_graph[column][node]]
+                            for item in sublist if item[0] != '']
+            # ERROR QUE FALTA POR RESOLVER
+            n = conflicts_graph[column][node]
+            local_combs = list(itertools.combinations(local_groups, len(conflicts_graph[column][node])))
+            local_combs = [list(comb) for comb in local_combs]
+            condition = all(True if len(group) == 1 else False for group in local_combs)
+            if not condition:
+                groups[node][column] = [group for group in local_combs if group[0][0] != group[1][0] if
+                                        len(set([item[0] for item in group])) == len(conflicts_graph[column][node])]
+            else:
+                groups[node][column] = local_combs
+
+
+    # Calculate the subnetworks
+    for network in conflicts_networks:
+        networks = [neto for neto in list(conflict_net2boolnet(network, conflicts_graph, groups=groups, tags=['activators', 'inhibitors']))]
+        """
+        networks = [[{key: value[2:-1] for (key, value) in network.items()}, network] for network
+                    in list(conflict_net2boolnet(network, conflicts_graph, groups=groups, tags=['activators', 'inhibitors']))]
+        networks = [item for sublist in networks for item in sublist]
+        """
+        networks_set = [net + '\n' + '\n'.join([f'{item[0]}, {item[1]}' for item in network.items()]) for network in networks]
+        yield networks_set
+
+
+
+def netValidator(original_networks, original_graph, attractors, conflicts_networks, conflicts_graph, tags):
     """
     DESCRIPTION:
     Given a function and an attractor, it is returned whether the function meets the attractors condition or not.
@@ -313,20 +526,38 @@ def netValidator(networks, graph, attractors):
     :param graph: [pandas dataframe] graph from which come the networks in the structure set in previous stages.
     :return: [list] networks that have passed the validation.
     """
+    # Auxiliary functions
+    def first_validation():
+        for original_net in original_networks:
+            # Finish the construction of all possible networks with conflicts networks
+            original_net = net2boolnet(original_net, original_graph, tags=['activators', 'inhibitors'])
+            nets = [item for sublist in list(conflicts_manager(original_net, conflicts_networks, conflicts_graph, tags))
+                    for item in sublist]
+            # Execute the validation of all possible networks
+            for net in nets:
+                primes = FileExchange.bnet2primes(net)
+                stg = StateTransitionGraphs.primes2stg(primes, "synchronous")
+                steady, cyclic = Attractors.compute_attractors_tarjan(stg)
+                steadies = [
+                    [att for att in attractors if steady_att.startswith(att)] for steady_att in steady
+                ]
+                steadies = list(set([item for sublist in steadies for item in sublist]))
+                condition = True if len(steadies) == len(attractors) else False
+                if condition:
+                    yield {
+                        'network': net,
+                        'steady': steady,
+                        'cyclic': cyclic
+                    }
+
     # Prepare the attractors
     t = np.array([[1], [0]])
     f = np.array([[0], [1]])
-    for i in range(0, len(attractors[:])):
-        attractors[i] = stpn([t if num == 1 else f for num in attractors[i]])
 
-    # Execute the validation
-    final_networks = []
-    for net in networks:
-        l = lGen(net, graph)
-        validation = all([True if all(attractor == stp(l, attractor)) else False for attractor in attractors])
-        if validation:
-            final_networks.append(net)
+    # Extend the original networks and execute the validation
+    extended_networks = list(first_validation())
+    return extended_networks
 
-    return final_networks
+
 
 
