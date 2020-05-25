@@ -6,7 +6,9 @@ In this script we test all the functions developed.
 
 import numpy as np 
 import pandas as pd
-from utils.ncbf import ncbfCalc, conflict_ncbfCalc, networksCalc, netValidator
+from utils.ncbf import ncbfCalc, conflict_ncbfCalc, networksCalc, netValidator, netFilter
+import ast
+
 
 def main():
 
@@ -16,38 +18,45 @@ def main():
     content = [[['D', 'F'], ['']], [['A'], ['E']], [['E'], ['A']], [['B'], ['C']]]
     original_data = pd.DataFrame(data=content, index=index, columns=columns)
 
-    # Conflicts graph
+    # Fixed conflicts graphs.
+    # Be noticed that here they are the graph with the variables and the one without any conflict introduced
+    index = ['E', 'F']
+    columns = ['expressions', 'activated', 'inhibited']
+    content = [[['B', 'C'], ['C'], ['B']], [['A', 'B', 'C'], ['A'], ['']]]
+    fixed_conflicts_data = pd.DataFrame(data=content, index=index, columns=columns)
+    index = ['A', 'B', 'C', 'D']
+    columns = ['activators', 'inhibitors']
+    content = [[['D'], ['']], [['A'], ['']], [[''], ['A']], [['B'], ['C']]]
+    initial_data = pd.DataFrame(data=content, index=index, columns=columns)
+
+    # Unfixed conflicts graphs
     index = ['E', 'F']
     tag = 'variables'
     columns = [tag]
-    content = [[['A', 'E']], [['A', 'B', 'C']]]
-    conflicts_data = pd.DataFrame(data=content, index=index, columns=columns)
+    content = [[['A', 'E']], [['A', 'D', 'E', 'F']]]
+    unfixed_conflicts_data = pd.DataFrame(data=content, index=index, columns=columns)
 
     # Get another DataFrame with all the possible ncbf.
     tags = ['activators', 'inhibitors']
+    initial_paths = ncbfCalc(data=initial_data, tags=tags)
     original_paths = ncbfCalc(data=original_data, tags=tags)
-    conflicts_paths, conflicts_graphs = conflict_ncbfCalc(variables=conflicts_data, tag=tag)
+    unfixed_conflicts_paths, unfixed_conflicts_graphs = conflict_ncbfCalc(variables=unfixed_conflicts_data, tag=tag)
 
     # Get all possible networks given the set of paths
     original_networks = list(networksCalc(original_paths))
-    sets_conflicts_networks = []
-    for set_paths in conflicts_paths:
-        sets_conflicts_networks.append(list(networksCalc(set_paths)))
+    initial_networks = list(networksCalc(initial_paths))
+    unfixed_sets_conflicts_networks = []
+    for set_paths in unfixed_conflicts_paths:
+        unfixed_sets_conflicts_networks.append(list(networksCalc(set_paths)))
 
     # Return the set of networks which meet the condition
     attractors = ['1101', '0010']
-    final_networks = []
-    num_sets_conflicts_networks = len(sets_conflicts_networks)
-    for i in range(0, num_sets_conflicts_networks):
-        final_networks.extend(
-            netValidator(original_networks, original_data, attractors, sets_conflicts_networks[i], conflicts_graphs[i], tags)
-        )
+    final_networks = netValidator(initial_networks, initial_data, original_networks, original_data, attractors,
+                                  unfixed_sets_conflicts_networks, unfixed_conflicts_graphs, fixed_conflicts_data, tags)
 
-    # Save the obtained set of networks
-    file = open('networks.txt', 'w')
-    file.write(str(final_networks))
-    file.close()
-    print()
+    # Filter by networks with coherent projection
+    networks = netFilter(final_networks)
+
 
 if __name__ == '__main__':
     main()

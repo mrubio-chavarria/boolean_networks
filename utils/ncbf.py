@@ -493,8 +493,6 @@ def conflicts_manager(net, conflicts_networks, conflicts_graph, tags):
         for column in tags:
             local_groups = [item for sublist in [[(letter, 1), (letter, 0)] for letter in conflicts_graph[column][node]]
                             for item in sublist if item[0] != '']
-            # ERROR QUE FALTA POR RESOLVER
-            n = conflicts_graph[column][node]
             local_combs = list(itertools.combinations(local_groups, len(conflicts_graph[column][node])))
             local_combs = [list(comb) for comb in local_combs]
             condition = all(True if len(group) == 1 else False for group in local_combs)
@@ -517,8 +515,8 @@ def conflicts_manager(net, conflicts_networks, conflicts_graph, tags):
         yield networks_set
 
 
-
-def netValidator(original_networks, original_graph, attractors, conflicts_networks, conflicts_graph, tags):
+def netValidator(initial_networks, initial_graph, original_networks, original_graph, attractors,
+                 unfixed_sets_conflicts_networks, unfixed_conflicts_graphs, fixed_conflicts_graph, tags):
     """
     DESCRIPTION:
     Given a function and an attractor, it is returned whether the function meets the attractors condition or not.
@@ -527,7 +525,7 @@ def netValidator(original_networks, original_graph, attractors, conflicts_networ
     :return: [list] networks that have passed the validation.
     """
     # Auxiliary functions
-    def first_validation():
+    def first_validation(conflicts_networks, conflicts_graph, extended_networks):
         for original_net in original_networks:
             # Finish the construction of all possible networks with conflicts networks
             original_net = net2boolnet(original_net, original_graph, tags=['activators', 'inhibitors'])
@@ -535,29 +533,116 @@ def netValidator(original_networks, original_graph, attractors, conflicts_networ
                     for item in sublist]
             # Execute the validation of all possible networks
             for net in nets:
-                primes = FileExchange.bnet2primes(net)
+                if net not in extended_networks:
+                    primes = FileExchange.bnet2primes(net)
+                    stg = StateTransitionGraphs.primes2stg(primes, "synchronous")
+                    steady, cyclic = Attractors.compute_attractors_tarjan(stg)
+                    steadies = [
+                        [att for att in attractors if steady_att.startswith(att)] for steady_att in steady
+                    ]
+                    steadies = list(set([item for sublist in steadies for item in sublist]))
+                    condition = True if len(steadies) == len(attractors) else False
+                    if condition:
+                        extended_networks.append(net)  # TO BE IMPROVED
+                        yield {
+                            'network': net,
+                            'steady': steady,
+                            'cyclic': cyclic
+                        }
+
+    def second_validation():
+        """
+        DESCRIPTION:
+        The version of the first validation but for conflicts with fixed structure.
+        """
+
+        # Take the nodes
+        nodes = []
+        [nodes.extend([it for sl in list(fixed_conflicts_graph.loc[index, :]) for it in sl if it != '']) for index in
+        fixed_conflicts_graph.index]
+        nodes = list(set(nodes))
+
+        for network in initial_networks:
+            # Build the original network
+            network = net2boolnet(network, initial_graph, tags=['activators', 'inhibitors'])
+            # Take the expressions needed
+            expressions = dict([(node.split(', ')) for node in network.split('\n')])
+            # Make the conflicts expressions
+            for variable in fixed_conflicts_graph.index:
+                variables = fixed_conflicts_graph.loc[variable, 'expressions']
+                activated = fixed_conflicts_graph.loc[variable, 'activated']
+                inhibited = fixed_conflicts_graph.loc[variable, 'inhibited']
+                # Introduce the conflicts
+                for node in initial_graph.index:
+                    if node in activated:
+                        expressions[node] = expressions[node] + '|' + f'{"&".join(variables)}'
+                    elif node in inhibited:
+                        expressions[node] = f'!({"&".join(variables)})' + '&' + expressions[node]
+
+            network = '\n'.join([', '.join(item) for item in expressions.items()])
+            # Assess the new network
+            primes = FileExchange.bnet2primes(network)
+            stg = StateTransitionGraphs.primes2stg(primes, "synchronous")
+            steady, cyclic = Attractors.compute_attractors_tarjan(stg)
+            steadies = [
+                [att for att in attractors if steady_att.startswith(att)] for steady_att in steady
+            ]
+            steadies = list(set([item for sublist in steadies for item in sublist]))
+            condition = True if len(steadies) == len(attractors) else False
+            if condition:
+                yield {
+                    'network': network,
+                    'steady': steady,
+                    'cyclic': cyclic
+                }
+
+
+    """
+    # Extend the original networks and execute the validation
+    num_sets_conflicts_networks = len(unfixed_sets_conflicts_networks)
+    assessed_networks = []
+    extended_ncbf_networks = []
+    for i in range(0, num_sets_conflicts_networks):
+        extended_ncbf_networks.extend(list(first_validation(unfixed_sets_conflicts_networks[i],
+                                                            unfixed_conflicts_graphs[i], assessed_networks)))
+    """
+
+    # Extend the original networks with the errors with fixed structure
+    extended_nncbf_networks = list(second_validation())
+
+    return 3
+
+
+def netFilter(networks):
+    """
+    DESCRIPTION:
+    A function to let only the promising networks. The ones which can be useful.
+    """
+    # Auxiliary functions
+    def simple_projection(nets, nodes):
+        for net in nets:
+            steadies = net['steady']
+            network = net['network'].split('\n')
+            positions = [i for i in range(0, len(network)) if network[i][0] in nodes]
+            chunks = [it for sl in [[(pos, steady[pos]) for steady in steadies] for pos in positions] for it in sl]
+            condition = all(
+                [True if len(list(set(group[:]))) == 1 else False for group in
+                 [[chunk[1] for chunk in chunks if chunk[0] == pos] for pos in positions]]
+            )
+            if condition:
+                values = dict(set([(network[chunk[0]][0], chunk[1]) for chunk in chunks]))
+                network = '\n'.join(
+                    [network[i].split(',')[0] + ', ' + values[network[i].split(',')[0]]
+                     if i in positions else network[i] for i in range(0, len(network))]
+                )
+                primes = FileExchange.bnet2primes(network)
                 stg = StateTransitionGraphs.primes2stg(primes, "synchronous")
                 steady, cyclic = Attractors.compute_attractors_tarjan(stg)
-                steadies = [
-                    [att for att in attractors if steady_att.startswith(att)] for steady_att in steady
-                ]
-                steadies = list(set([item for sublist in steadies for item in sublist]))
-                condition = True if len(steadies) == len(attractors) else False
-                if condition:
-                    yield {
-                        'network': net,
-                        'steady': steady,
-                        'cyclic': cyclic
-                    }
-
-    # Prepare the attractors
-    t = np.array([[1], [0]])
-    f = np.array([[0], [1]])
-
-    # Extend the original networks and execute the validation
-    extended_networks = list(first_validation())
-    return extended_networks
-
-
+                net['steady'] = steady
+                net['cyclic'] = cyclic
+                yield net
+    nodes = ['E', 'F']
+    networks = list(simple_projection(nets=networks, nodes=nodes))
+    print()
 
 
