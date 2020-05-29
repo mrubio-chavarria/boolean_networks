@@ -5,7 +5,7 @@ In this file, they are given several utilities to the calculation of nested cana
 (boolean_networks).
 """
 import sys
-from itertools import combinations, permutations, product
+from itertools import combinations, permutations, product, combinations_with_replacement
 from functools import reduce
 from operator import add
 from random import choice
@@ -14,6 +14,8 @@ import numpy as np
 from utils.stp import stpn
 from PyBoolNet import Repository, StateTransitionGraphs, Attractors, FileExchange
 import itertools
+import random
+from utils.conflicts_theory import Pathway, Conflict
 
 
 def get_level(tree, path, level):
@@ -553,7 +555,8 @@ def netValidator(initial_networks, initial_graph, original_networks, original_gr
     def second_validation():
         """
         DESCRIPTION:
-        The version of the first validation but for conflicts with fixed structure.
+        The version of the first validation but for conflicts with fixed structure. But this structure is given
+        previously, not discovered in the moment.
         """
 
         # Take the nodes
@@ -596,8 +599,60 @@ def netValidator(initial_networks, initial_graph, original_networks, original_gr
                     'cyclic': cyclic
                 }
 
+    def third_validation(graph):
+        """
+        DESCRIPTION:
+        The third mecanism ot treating the conflicts.
+        """
+        # Auxiliary functions
+        def str_gen(n):
+            for i in range(0, n):
+                yield '0'
 
-    """
+        # Generate the matrix with the priorities
+        blosum = blosum_generator(graph)
+
+        # All possible variables combinations
+        combinations = [bin(i).split('b')[1] if len(bin(i).split('b')[1]) == len(graph.index) else
+                        ''.join(str_gen(len(graph.index) - len(bin(i).split('b')[1]))) + bin(i).split('b')[1]
+                        for i in range(0, 2 ** len(graph.index))]
+        space = [{graph.index[i]: int(c[i]) for i in range(0, len(c))} for c in combinations]
+
+        # Generate the set of pathways
+        pathways = []
+        for node in graph.index:
+            [pathways.append(Pathway(antecedent=act, consequent=node, activator=True, space=space))
+             for act in graph['activators'][node] if act != '']
+            [pathways.append(Pathway(antecedent=inh, consequent=node, activator=False, space=space))
+             for inh in graph['inhibitors'][node] if inh != '']
+
+        # Detect and create conflicts
+        i = 0
+        for initial_network in initial_networks:
+            while i < len(graph.index):
+                node = graph.index[i]
+                node_pathways = {'activators': [], 'inhibitors': []}
+                [node_pathways['activators'].append(pathway) if pathway.activator
+                 else node_pathways['inhibitors'].append(pathway) for pathway in pathways if pathway.consequent == node]
+                if node_pathways['activators'] == [] or node_pathways['inhibitors'] == []:
+                    i += 1
+                    continue
+                act_rois = set([it for sl in [pathway.region_of_interest for pathway in node_pathways['activators']]
+                                for it in sl])
+                inh_rois = set([it for sl in [pathway.region_of_interest for pathway in node_pathways['inhibitors']]
+                                for it in sl])
+                psi = act_rois & inh_rois
+                conflict = Conflict(node_pathways['activators'][0], node_pathways['inhibitors'][0], blosum, psi, graph)
+                conflict.solve(initial_network)
+                print()
+                i += 1
+
+
+        # Treat the conflicts
+
+        return 3
+
+    """ This is for the first validation
     # Extend the original networks and execute the validation
     num_sets_conflicts_networks = len(unfixed_sets_conflicts_networks)
     assessed_networks = []
@@ -608,10 +663,26 @@ def netValidator(initial_networks, initial_graph, original_networks, original_gr
     """
 
     # Extend the original networks with the errors with fixed structure
-    extended_nncbf_networks = list(second_validation())
+    final_networks = third_validation(initial_graph)
 
     return 3
 
+
+def blosum_generator(graph):
+    """
+    DESCRIPTION:
+    A function to randomly generate a priority matrix in the way of blosum matrices for alignments.
+    :param graph: [pandas Dataframe] the graph to whom we aim to produce the matrix.
+    :return: the randomly generated matrix.
+    """
+    labels = [''.join(it) for sl in
+              [combinations(graph.index, i) for i in range(1, len(graph.index) + 1)]
+              for it in sl]
+    content = [random.sample(range(1, 2 * len(labels) * len(labels) + 1), len(labels)) for row in labels]
+    content = [[0 if i == j else content[i][j] for j in range(0, len(content[i]))] for i in range(0, len(content))]
+    blosum = pd.DataFrame(data=content, index=labels, columns=labels)
+
+    return blosum
 
 def netFilter(networks):
     """
