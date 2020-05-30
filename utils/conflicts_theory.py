@@ -1,6 +1,9 @@
 import re
-import pandas as pd
 import sys
+import itertools
+import pandas as pd
+from utils.utils import Term
+from utils.Kmap import Minterms
 
 
 class Pathway:
@@ -10,7 +13,7 @@ class Pathway:
     """
 
     # Methods
-    def __init__(self, antecedent, consequent, activator, space=None):
+    def __init__(self, antecedent, consequent, activator, space=None, expression=None):
         """
         DESCRIPTION:
         Constructor of the object.
@@ -20,10 +23,10 @@ class Pathway:
         :param space: [list] list of dicts with all variables combinations which form space in which the function is
         defined.
         """
-        self.antecedent = antecedent
+        self.antecedent = ''.join(sorted(antecedent))
         self.consequent = consequent
         self.activator = activator
-        self.expression = self.set_antecedent_expression_from_graph(antecedent)
+        self.expression = self.set_antecedent_expression_from_graph(antecedent) if expression is None else expression
         if space is None:
             self.map = None
             self.region_of_interest = None
@@ -32,6 +35,53 @@ class Pathway:
 
     def __str__(self):
         return self.antecedent + ' --> ' + self.consequent + '\n Activator: ' + str(self.activator)
+
+    def set_expression(self, psi, graph, variables):
+        """
+        DESCRIPTION:
+        On the contrary to one below this method is designed to correct the expression. If it is required it will make
+        another pathway in order to keep the expression coherent.
+        :param psi: [list] minterms produced by karnaugh maps simplification.
+        :param graph: [pandas DataFrame] the graph with which we are working.
+        :param variables: [list] dicts representing the space, variables combinations, in which the expression is to be
+        assessed.
+        :return: [list] pathways resulting from the modification of the expression.
+        """
+        # Auxiliary functions
+        def minterm_checker(factors):
+            conditions = []
+            for factor_1 in factors[:]:
+                if factor_1[0] == '!':
+                    continue
+                conditions.extend([True if (factor_1 not in factor_2) or (factor_1 in factor_2 and '!' not in factor_2)
+                                   else False for factor_2 in factors[:]])
+            return all(conditions)
+
+        # Correct the expression and make all the combinations in the left side of the pathway
+        psi = [[graph.index[i] if word[i] == '0' else '!' + graph.index[i]
+                for i in range(0, len(word)) if word[i] != '*'] for word in psi]
+        # psi = [['!B', '!C'], ['!A', '!B'], ['!D', 'C']]
+        if len(psi) != 1:
+            psi = [[[[(f1, f2) for f2 in psi[j]] for f1 in psi[i]] for j in range(i+1, len(psi))] for i in range(0, len(psi)-1)]
+            psi = [list(it1) for sl1 in [it2 for sl2 in [it3 for sl3 in psi for it3 in sl3] for it2 in sl2] for it1 in sl1]
+        new_psi = []
+        [new_psi.append(it) for sl in [[[var, self.expression] for var in group] for group in psi] for it in sl
+         if minterm_checker(it) if it not in new_psi]
+        psi = [list(set(term)) for term in new_psi]
+
+        # Make all the necessary pathways
+        r = re.compile('\w')
+        new_pathways = []
+        for group in psi:
+            expression = '&'.join(group)
+            antecedent = ''.join(r.findall(expression))
+            new_pathways.append(Pathway(antecedent=antecedent, consequent=self.consequent, activator=self.activator,
+                                        space=variables, expression=expression))
+
+        self.antecedent = ''.join(r.findall(self.expression))
+        # Update the region of interest
+        self.set_map(variables)
+        return new_pathways
 
     def set_antecedent_expression_from_graph(self, original):
         """
@@ -55,16 +105,20 @@ class Pathway:
         def local_eval(minterm, variables):
             condition = lambda x: variables[x[0]] == 1 if x[0] != '!' else not variables[x[1]] == 1
             if '!' == minterm[0]:
-                minterm = minterm[2:-1].split('&')
-                value = not all(map(condition, minterm))
+                minterm = minterm[1::]
+                response = not all(map(condition, minterm))
             else:
-                minterm = minterm.split('&')
-                value = all(map(condition, minterm))
-            return value
+                response = all(map(condition, minterm))
+            return response
 
         values = []
-        r = re.compile(r'\!\([^\)]+\)|\w(?![^(]*\))')
-        minterms = r.findall(self.expression)
+        r = re.compile(r'\!\([^\)]+\)|\w(?![^(]*\))|[!](?=\w)')
+        minterms = [item for item in r.findall(self.expression)]
+        for i in range(0, len(minterms)):
+            if minterms[i] == '!':
+                minterms[i+1] = '!' + minterms[i+1]
+
+        minterms = list(filter(lambda x: x != '!', minterms))
         values = [local_eval(minterm, variables) for minterm in minterms]
         value = all(values)
         return value
@@ -101,7 +155,11 @@ class Conflict:
         """
         self.first_pathway = first_pathway
         self.second_pathway = second_pathway
-        self.priority = self.set_priority(priority_matrix)
+        try:
+            self.priority = self.set_priority(priority_matrix) # Pathway with the lowest priority.
+        except:
+            print(first_pathway)
+            print(second_pathway)
         self.psi = psi
         self.graph = graph
 
@@ -131,15 +189,55 @@ class Conflict:
         new pathways.
         :param initial_network: [list] the structure in which the graph nodes are distributed.
         """
-        psi = [
-            f"!({'&'.join([self.graph.index[i] if word[i] == '1' else '!' + self.graph.index[i] for i in range(0, len(word))])})"
-            for word in self.psi
-        ]
-        psi = '&'.join(psi)
-        self.priority.expression = psi + '&' + self.priority.expression
+        # Auxiliary functions
+        def str_gen(n):
+            for i in range(0, n):
+                yield '0'
+        combinations = [bin(i).split('b')[1] if len(bin(i).split('b')[1]) == len(self.graph.index) else
+                        ''.join(str_gen(len(self.graph.index) - len(bin(i).split('b')[1]))) + bin(i).split('b')[1]
+                        for i in range(0, 2 ** len(self.graph.index))]
+        variables = [{self.graph.index[i]: int(comb[i]) for i in range(0, len(comb))} for comb in combinations]
+        # Simplify psi
+        psi = [Term(value) for value in list(self.psi)]
+        psi = Minterms(psi)
+        psi.simplify()
+        psi = [str(term) for term in psi.result]
+        original_psi = [f"{'&'.join([self.graph.index[i] if word[i] == '1' else '!' + self.graph.index[i] for i in range(0, len(word)) if word[i] != '*'])}" for word in psi]
+        original_psi = '&'.join(original_psi)
+        # Correct the pathway and generate pathways resulting from the correction
+        new_pathways = self.priority.set_expression(psi, self.graph, variables)
+        new_pathways = new_pathways if new_pathways is not None else []
+        high_pathway = [path for path in [self.first_pathway, self.second_pathway] if path != self.priority][0]
+        # Generate the basis map
         kmap = KMap(initial_network, self.graph)
-        print(self.psi)
-        print()
+        # Impose the solution over the map
+        high_pathway.expression = high_pathway.antecedent
+        minterms = [''.join([str(value) for value in variable.values()]) for variable in variables
+                    if high_pathway.eval_expression(variable)]
+        kmap.maps.at[high_pathway.consequent, minterms] = high_pathway.activator
+        positions = kmap.maps.loc[high_pathway.consequent, :]
+        positions = positions[positions != high_pathway.activator].index
+        minterms = [Term(minterm) for minterm in positions]
+        minterms = Minterms(minterms)
+        minterms.simplify()
+        s = [str(term) for term in minterms.result]
+        s_nb = [f"{'&'.join([self.graph.index[i] if word[i] == '1' else '!' + self.graph.index[i] for i in range(0, len(word)) if word[i] != '*'])}"
+                for word in s]
+        # Generate new pathways
+        r = re.compile('\w')
+        for minterm in s_nb:
+            for var in minterm.split('&'):
+                if var[0] == '!':
+                    var = var[1]
+                    activator = False
+                else:
+                    var = var[0]
+                    activator = True
+                antecedent = r.findall(original_psi)  # The antecedent is supposed to be built upon the letter only
+                new_pathways.append(Pathway(antecedent=antecedent, consequent=var, activator=activator,
+                                            space=variables))
+
+        return new_pathways
 
 
 class KMap:
@@ -158,7 +256,7 @@ class KMap:
         """
         self.network = network
         self.graph = graph
-        self.map = self.set_map()
+        self.maps = self.set_maps()
 
     def eval_expression(self, variables_set, expressions):
         """
@@ -216,7 +314,7 @@ class KMap:
                                              not variables[factor[1]] == 1 for factor in factors]))
         return final_values
 
-    def set_map(self):
+    def set_maps(self):
         """
         DESCRIPTION:
         A method to calculate the response of the function in the whole space of the boolean expressions of the network.
@@ -266,9 +364,10 @@ class KMap:
                   for i in range(0, len(self.graph.index))]
         index = self.graph.index
         columns = combinations
-        kmap = pd.DataFrame(data=values, index=index, columns=columns)
-        self.map = kmap
-        return kmap
+        # Change and send the map
+        kmaps = pd.DataFrame(data=values, index=index, columns=columns)
+        self.maps = kmaps
+        return kmaps
 
 
 

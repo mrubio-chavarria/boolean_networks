@@ -7,7 +7,7 @@ inspired by Karnaugh Map.
 import itertools
 from copy import deepcopy
 
-from utils import (
+from utils.utils import (
     Term,
     diff_terms,
     get_not_simplified_terms,
@@ -102,11 +102,11 @@ class Minterms(object):
 
 
 if __name__ == "__main__":
-    str_terms = ["0010", "0000", "0110", "1000"]
+    str_terms = ['0111', '0110', '1111', '1110']
     terms_not_care = ["1010", "1011", "1100", "1101", "1110", "1111"]
     t_minterms = [Term(term) for term in str_terms]
     not_cares = [Term(term) for term in terms_not_care]
 
-    minterms = Minterms(t_minterms, not_cares=not_cares)
+    minterms = Minterms(t_minterms)  # , not_cares=not_cares)
     minterms.simplify()
     print(minterms.result)

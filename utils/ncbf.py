@@ -642,9 +642,11 @@ def netValidator(initial_networks, initial_graph, original_networks, original_gr
                 inh_rois = set([it for sl in [pathway.region_of_interest for pathway in node_pathways['inhibitors']]
                                 for it in sl])
                 psi = act_rois & inh_rois
-                conflict = Conflict(node_pathways['activators'][0], node_pathways['inhibitors'][0], blosum, psi, graph)
-                conflict.solve(initial_network)
-                print()
+                if len(psi) > 0:
+                    print(node_pathways)
+                    conflict = Conflict(node_pathways['activators'][0], node_pathways['inhibitors'][0], blosum, psi, graph)
+                    pathways.extend(conflict.solve(initial_network))
+                    i = -1
                 i += 1
 
 
