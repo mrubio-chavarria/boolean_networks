@@ -4,6 +4,7 @@ import itertools
 import pandas as pd
 from utils.utils import Term
 from utils.Kmap import Minterms
+import random
 
 
 class Pathway:
@@ -49,18 +50,19 @@ class Pathway:
         """
         # Auxiliary functions
         def minterm_checker(factors):
-            conditions = []
-            for factor_1 in factors[:]:
-                if factor_1[0] == '!':
-                    continue
-                conditions.extend([True if (factor_1 not in factor_2) or (factor_1 in factor_2 and '!' not in factor_2)
-                                   else False for factor_2 in factors[:]])
-            return all(conditions)
+            condition = True
+            new_factors = []
+            [new_factors.append(it) for sl in [factor.split('&') for factor in factors]
+             for it in sl if it not in new_factors]
+            for factor_1 in new_factors[:]:
+                for factor_2 in new_factors[:]:
+                    if factor_1 == '!' + factor_2 or factor_2 == '!' + factor_1:
+                        condition = False
+            return condition
 
         # Correct the expression and make all the combinations in the left side of the pathway
         psi = [[graph.index[i] if word[i] == '0' else '!' + graph.index[i]
                 for i in range(0, len(word)) if word[i] != '*'] for word in psi]
-        # psi = [['!B', '!C'], ['!A', '!B'], ['!D', 'C']]
         if len(psi) != 1:
             psi = [[[[(f1, f2) for f2 in psi[j]] for f1 in psi[i]] for j in range(i+1, len(psi))] for i in range(0, len(psi)-1)]
             psi = [list(it1) for sl1 in [it2 for sl2 in [it3 for sl3 in psi for it3 in sl3] for it2 in sl2] for it1 in sl1]
@@ -68,7 +70,6 @@ class Pathway:
         [new_psi.append(it) for sl in [[[var, self.expression] for var in group] for group in psi] for it in sl
          if minterm_checker(it) if it not in new_psi]
         psi = [list(set(term)) for term in new_psi]
-
         # Make all the necessary pathways
         r = re.compile('\w')
         new_pathways = []
@@ -78,9 +79,9 @@ class Pathway:
             new_pathways.append(Pathway(antecedent=antecedent, consequent=self.consequent, activator=self.activator,
                                         space=variables, expression=expression))
 
-        self.antecedent = ''.join(r.findall(self.expression))
+        """self.antecedent = ''.join(r.findall(self.expression))
         # Update the region of interest
-        self.set_map(variables)
+        self.set_map(variables)"""
         return new_pathways
 
     def set_antecedent_expression_from_graph(self, original):
@@ -133,7 +134,7 @@ class Pathway:
         """
         self.map = {''.join([str(var) for var in vs_set.values()]): self.eval_expression(vs_set)
                     for vs_set in variables_set}
-        self.region_of_interest = [key for key in self.map.keys() if self.map[key]]
+        self.region_of_interest = list(sorted([key for key in self.map.keys() if self.map[key]]))
 
 
 class Conflict:
@@ -155,11 +156,7 @@ class Conflict:
         """
         self.first_pathway = first_pathway
         self.second_pathway = second_pathway
-        try:
-            self.priority = self.set_priority(priority_matrix) # Pathway with the lowest priority.
-        except:
-            print(first_pathway)
-            print(second_pathway)
+        self.priority = self.set_priority(priority_matrix) # Pathway with the lowest priority.
         self.psi = psi
         self.graph = graph
 
@@ -173,6 +170,7 @@ class Conflict:
         priority.
         :param priority_matrix: [pandas DataFrame] Matrix with the scores to determine which pathway has the lowest
         priority and, consequently, it is to be modified.
+        :return: [Pathway] the pathway object with the lowest priority.
         """
         firsts_priority = priority_matrix.loc[self.first_pathway.antecedent, self.second_pathway.antecedent]
         seconds_priority = priority_matrix.loc[self.second_pathway.antecedent, self.first_pathway.antecedent]
@@ -182,12 +180,15 @@ class Conflict:
             self.priority = self.second_pathway
         return self.priority
 
-    def solve(self, initial_network):
+    def solve(self, initial_network, base_map):
         """
         DESCRIPTION:
         A method to solve the conflict through the modification of the pathway with lowest priority. It too creates
         new pathways.
         :param initial_network: [list] the structure in which the graph nodes are distributed.
+        :param base_map: [KMap] the object with the information of the map upon which all the conflicts are being
+        applied.
+        :return: [dict] the whole set of pathways to be deleted and to be added to the rest.
         """
         # Auxiliary functions
         def str_gen(n):
@@ -208,36 +209,39 @@ class Conflict:
         new_pathways = self.priority.set_expression(psi, self.graph, variables)
         new_pathways = new_pathways if new_pathways is not None else []
         high_pathway = [path for path in [self.first_pathway, self.second_pathway] if path != self.priority][0]
-        # Generate the basis map
-        kmap = KMap(initial_network, self.graph)
         # Impose the solution over the map
-        high_pathway.expression = high_pathway.antecedent
+        # new_pathways.extend(high_pathway.set_expression(psi, self.graph, variables))
+        # high_pathway.expression = high_pathway.antecedent
         minterms = [''.join([str(value) for value in variable.values()]) for variable in variables
                     if high_pathway.eval_expression(variable)]
-        kmap.maps.at[high_pathway.consequent, minterms] = high_pathway.activator
-        positions = kmap.maps.loc[high_pathway.consequent, :]
+        base_map.maps.at[high_pathway.consequent, minterms] = high_pathway.activator
+        positions = base_map.maps.loc[high_pathway.consequent, :]
         positions = positions[positions != high_pathway.activator].index
         minterms = [Term(minterm) for minterm in positions]
         minterms = Minterms(minterms)
         minterms.simplify()
         s = [str(term) for term in minterms.result]
-        s_nb = [f"{'&'.join([self.graph.index[i] if word[i] == '1' else '!' + self.graph.index[i] for i in range(0, len(word)) if word[i] != '*'])}"
-                for word in s]
+        # Select the most advantageous term
+        # TO BE IMPLEMENTED. By this time it is only selected a random term.
+        word = random.choice(s)
+        minterm = f"{'&'.join([self.graph.index[i] if word[i] == '1' else '!' + self.graph.index[i] for i in range(0, len(word)) if word[i] != '*'])}"
         # Generate new pathways
         r = re.compile('\w')
-        for minterm in s_nb:
-            for var in minterm.split('&'):
-                if var[0] == '!':
-                    var = var[1]
-                    activator = False
-                else:
-                    var = var[0]
-                    activator = True
-                antecedent = r.findall(original_psi)  # The antecedent is supposed to be built upon the letter only
-                new_pathways.append(Pathway(antecedent=antecedent, consequent=var, activator=activator,
-                                            space=variables))
-
-        return new_pathways
+        for var in minterm.split('&'):
+            if var[0] == '!':
+                var = var[1]
+                activator = False
+            else:
+                var = var[0]
+                activator = True
+            antecedent = r.findall(original_psi)  # The antecedent is supposed to be built upon the letter only
+            new_pathways.append(Pathway(antecedent=antecedent, consequent=var, activator=activator, space=variables))
+        # Create the response
+        response = {
+            'delete': self.priority,
+            'add': new_pathways
+        }
+        return response
 
 
 class KMap:

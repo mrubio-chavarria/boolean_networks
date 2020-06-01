@@ -15,7 +15,7 @@ from utils.stp import stpn
 from PyBoolNet import Repository, StateTransitionGraphs, Attractors, FileExchange
 import itertools
 import random
-from utils.conflicts_theory import Pathway, Conflict
+from utils.conflicts_theory import Pathway, Conflict, KMap
 
 
 def get_level(tree, path, level):
@@ -609,8 +609,24 @@ def netValidator(initial_networks, initial_graph, original_networks, original_gr
             for i in range(0, n):
                 yield '0'
 
-        # Generate the matrix with the priorities
-        blosum = blosum_generator(graph)
+        def finish_results(results, iters, sims):
+            for i in range(0, len(iters)):
+                results[i]['iteration'] = iters[i]
+                results[i]['simulation'] = sims[i]
+                yield results[i]
+
+        def conflicts_manager(group):
+            # Pathways validation
+            if len(pathways) >= max_pathways:
+                raise StopIteration
+            act_roi = set(group[0].region_of_interest)
+            inh_roi = set(group[1].region_of_interest)
+            psi = act_roi & inh_roi
+            if len(psi) > 0:
+                conflict = Conflict(group[0], group[1], blosum, psi, graph)
+                solution = conflict.solve(initial_network, base_map)
+                pathways.extend(solution['add'])
+                return solution['delete']
 
         # All possible variables combinations
         combinations = [bin(i).split('b')[1] if len(bin(i).split('b')[1]) == len(graph.index) else
@@ -618,36 +634,93 @@ def netValidator(initial_networks, initial_graph, original_networks, original_gr
                         for i in range(0, 2 ** len(graph.index))]
         space = [{graph.index[i]: int(c[i]) for i in range(0, len(c))} for c in combinations]
 
-        # Generate the set of pathways
-        pathways = []
+        # Generate the initial set of pathways
+        initial_pathways = []
         for node in graph.index:
-            [pathways.append(Pathway(antecedent=act, consequent=node, activator=True, space=space))
+            [initial_pathways.append(Pathway(antecedent=act, consequent=node, activator=True, space=space))
              for act in graph['activators'][node] if act != '']
-            [pathways.append(Pathway(antecedent=inh, consequent=node, activator=False, space=space))
+            [initial_pathways.append(Pathway(antecedent=inh, consequent=node, activator=False, space=space))
              for inh in graph['inhibitors'][node] if inh != '']
 
-        # Detect and create conflicts
-        i = 0
-        for initial_network in initial_networks:
-            while i < len(graph.index):
-                node = graph.index[i]
-                node_pathways = {'activators': [], 'inhibitors': []}
-                [node_pathways['activators'].append(pathway) if pathway.activator
-                 else node_pathways['inhibitors'].append(pathway) for pathway in pathways if pathway.consequent == node]
-                if node_pathways['activators'] == [] or node_pathways['inhibitors'] == []:
+        # Set initial parameters of the similations
+        results = []
+        iters = []
+        sims = []
+        simulations = 60
+        max_iterations = 200
+        max_pathways = 600
+
+        # Launch the simulations
+        for m in range(0, simulations):
+            # Generate the matrix with the priorities for the simulation
+            blosum = blosum_generator(graph)
+            net_counter = -1
+            for initial_network in initial_networks:
+                net_counter += 1
+                condition_result = True  # set the condition to append the result of the simulation
+                pathways = initial_pathways[:]
+                n_pathways = len(pathways)  # number of pathways
+                # Generate the basis map
+                base_map = KMap(initial_network, graph)
+                # Control parameters
+                i = 0
+                iter_count = 0
+                # Calculate
+                while i < len(graph.index):
+                    print(f'Simulation: {m} Net: {net_counter} Iteration: {iter_count} Node: {i}')
+                    # Get the pathways of the node
+                    node = graph.index[i]
+                    node_pathways = {'activators': [], 'inhibitors': []}
+                    [node_pathways['activators'].append(pathway) if pathway.activator
+                     else node_pathways['inhibitors'].append(pathway) for pathway in pathways if pathway.consequent == node]
+                    # Start the conflict management
+                    if node_pathways['activators'] == [] or node_pathways['inhibitors'] == []:
+                        i += 1
+                        continue
+                    # Calculate and solve the conflicts
+                    groups = itertools.product(node_pathways['activators'], node_pathways['inhibitors'], repeat=1)
+                    try:
+                        to_be_deleted = list(map(conflicts_manager, groups))
+                    except StopIteration:
+                        print('Exceeded limit in the number of pathways. Terminate.')
+                        condition_result = False
+                        break
+                    pathways = list(filter(lambda x: x not in to_be_deleted, pathways))
+                    # Filtering of equivalent pathways
+                    occurrences = []
+                    codes = []
+                    for p in range(0, len(pathways)):
+                        path1 = pathways[p]
+                        for q in range(0, len(pathways)):
+                            path2 = pathways[q]
+                            if path1.region_of_interest == path2.region_of_interest and path1.consequent == path2.consequent:
+                                code = ''.join(path1.region_of_interest) + path1.consequent
+                                occurrences += [(p, code)]
+                                codes += [code] if code not in codes else []
+                    occurrences = [list(filter(lambda x: x[1] == code, occurrences))[0] for code in codes]
+                    pathways = [pathways[p[0]] for p in occurrences]
+                    # Validation
+                    if i == len(graph.index) - 1:
+                        iter_count += 1
+                        if iter_count >= max_iterations:
+                            condition_result = False
+                            break
+                        if len(pathways) != n_pathways:
+                            i = 0
+                            n_pathways = len(pathways)
+                            continue
                     i += 1
-                    continue
-                act_rois = set([it for sl in [pathway.region_of_interest for pathway in node_pathways['activators']]
-                                for it in sl])
-                inh_rois = set([it for sl in [pathway.region_of_interest for pathway in node_pathways['inhibitors']]
-                                for it in sl])
-                psi = act_rois & inh_rois
-                if len(psi) > 0:
-                    print(node_pathways)
-                    conflict = Conflict(node_pathways['activators'][0], node_pathways['inhibitors'][0], blosum, psi, graph)
-                    pathways.extend(conflict.solve(initial_network))
-                    i = -1
-                i += 1
+                # Check the condition and add the new result
+                if condition_result:
+                    result = {'network': initial_network, 'pathways': pathways}
+                    if result not in results:
+                        results.append({'network': initial_network, 'pathways': pathways, 'maps_set': base_map})
+                        sims.append(m)
+                        iters.append(iter_count)
+
+        # Finish the results
+        results = list(finish_results(results, iters, sims))
+
 
 
         # Treat the conflicts
