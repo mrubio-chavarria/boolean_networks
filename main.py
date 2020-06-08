@@ -24,9 +24,9 @@ def main():
     columns = ['expressions', 'activated', 'inhibited']
     content = [[['B', 'C'], ['C'], ['B']], [['A', 'B', 'C'], ['A'], ['']]]
     fixed_conflicts_data = pd.DataFrame(data=content, index=index, columns=columns)
-    index = ['A', 'B', 'C', 'D']
+    index = ['A', 'B', 'C', 'D', 'E']
     columns = ['activators', 'inhibitors']
-    content = [[['D'], ['']], [['A'], ['']], [[''], ['A']], [['B'], ['C']]]
+    content = [[['D', 'E'], ['']], [['A'], ['']], [[''], ['A']], [['B'], ['C']], [[''], ['']]]
     initial_data = pd.DataFrame(data=content, index=index, columns=columns)
 
     # Unfixed conflicts graphs
