@@ -645,10 +645,13 @@ def netValidator(initial_networks, initial_graph, original_networks, original_gr
 
         # Set initial parameters of the similations
         results = []
-        simulations = 3
-
+        simulations = 100
         max_iterations = 200
         max_pathways = 64
+
+        # Get all inputs
+        inputs = [el for el in graph.index if graph.loc[el, 'activators'] == [''] and
+                  graph.loc[el, 'inhibitors'] == ['']]
 
         # Launch the simulations
         print('Launching simulations')
@@ -669,76 +672,83 @@ def netValidator(initial_networks, initial_graph, original_networks, original_gr
                     iter_count = 0
                     conflicts = []
                     # Calculate
-                    while i < len(graph.index):
-
-                        # Get the pathways of the node
-                        node = graph.index[i]
-                        node_pathways = {'activators': [], 'inhibitors': []}
-                        [node_pathways['activators'].append(pathway) if pathway.activator
-                         else node_pathways['inhibitors'].append(pathway) for pathway in pathways
-                         if pathway.consequent == node]
-                        """
-                        # Temporary conflicts procedure
-                        # ----------------------------------------------------------------------------------------------
-                        # Start the conflict management
-                        old_pathways = pathways[:]
-                        if node_pathways['activators'] == [] or node_pathways['inhibitors'] == []:
-                            i += 1
-                            continue
-                        # Calculate and solve the conflicts
-                        groups = itertools.product(node_pathways['activators'], node_pathways['inhibitors'], repeat=1)
-                        try:
-                            to_be_deleted = []
-                            [(to_be_deleted.append(solution[0]), conflicts.append(solution[1])) for solution
-                             in list(map(conflicts_manager, groups)) if solution is not None]
-                        except StopIteration:
-                            print('Exceeded limit in the number of pathways. Terminate.')
-                            condition_result = False
-                            break
-                        pathways = list(filter(lambda x: x not in to_be_deleted, pathways))
-                        # ----------------------------------------------------------------------------------------------
-                        """
-                        # Testing conflicts procedure
-                        # ----------------------------------------------------------------------------------------------
-                        # Solve the conflicts
-                        pathways = list(filter(lambda x: x.consequent != node, pathways))
-                        manager = ConflictsManager(activators=node_pathways['activators'],
-                                                   inhibitors=node_pathways['inhibitors'],
-                                                   priority_matrix=blosum,
-                                                   network=initial_network,
-                                                   conflicts=conflicts,
-                                                   base_map=base_map,
-                                                   graph=graph,
-                                                   node=node)
-                        solution = manager.get_solution()
-                        pathways.extend(manager.get_solution())
-                        pathways.sort(key=lambda x: x.consequent)
-                        # ----------------------------------------------------------------------------------------------
-                        # Filtering of equivalent pathways
-                        occurrences = []
-                        codes = []
-                        for p in range(0, len(pathways)):
-                            path1 = pathways[p]
-                            for q in range(0, len(pathways)):
-                                path2 = pathways[q]
-                                if path1.region_of_interest == path2.region_of_interest and\
-                                        path1.consequent == path2.consequent:
-                                    code = ''.join(path1.region_of_interest) + path1.consequent
-                                    occurrences += [(p, code)]
-                                    codes += [code] if code not in codes else []
-                        occurrences = [list(filter(lambda x: x[1] == code, occurrences))[0] for code in codes]
-                        pathways = [pathways[p[0]] for p in occurrences]
-                        # Validation
-                        if i == len(graph.index) - 1:
-                            iter_count += 1
-                            if iter_count >= max_iterations:
+                    try:
+                        while i < len(graph.index):
+                            # Get the pathways of the node
+                            node = graph.index[i]
+                            node_pathways = {'activators': [], 'inhibitors': []}
+                            [node_pathways['activators'].append(pathway) if pathway.activator
+                             else node_pathways['inhibitors'].append(pathway) for pathway in pathways
+                             if pathway.consequent == node]
+                            """
+                            # Temporary conflicts procedure
+                            # ------------------------------------------------------------------------------------------
+                            # Start the conflict management
+                            old_pathways = pathways[:]
+                            if node_pathways['activators'] == [] or node_pathways['inhibitors'] == []:
+                                i += 1
+                                continue
+                            # Calculate and solve the conflicts
+                            groups = itertools.product(node_pathways['activators'], node_pathways['inhibitors'], repeat=1)
+                            try:
+                                to_be_deleted = []
+                                [(to_be_deleted.append(solution[0]), conflicts.append(solution[1])) for solution
+                                 in list(map(conflicts_manager, groups)) if solution is not None]
+                            except StopIteration:
+                                print('Exceeded limit in the number of pathways. Terminate.')
                                 condition_result = False
                                 break
-                            if len(pathways) != n_pathways:
-                                i = 0
-                                n_pathways = len(pathways)
-                                continue
-                        i += 1
+                            pathways = list(filter(lambda x: x not in to_be_deleted, pathways))
+                            # ------------------------------------------------------------------------------------------
+                            """
+                            # Testing conflicts procedure
+                            # ------------------------------------------------------------------------------------------
+                            # Solve the conflicts
+                            pathways = list(filter(lambda x: x.consequent != node, pathways))
+                            manager = ConflictsManager(activators=node_pathways['activators'],
+                                                       inhibitors=node_pathways['inhibitors'],
+                                                       priority_matrix=blosum,
+                                                       network=initial_network,
+                                                       conflicts=conflicts,
+                                                       base_map=base_map,
+                                                       graph=graph,
+                                                       node=node)
+                            pathways.extend(manager.get_solution())
+                            pathways.sort(key=lambda x: x.consequent)
+                            # ------------------------------------------------------------------------------------------
+                            # INPUT validation:
+                            # There cannot be any pathway with an input in the consequent
+                            if len(pathways) != len(list(filter(lambda x: x.consequent not in inputs, pathways))):
+                                raise ValueError
+                            # Filtering of equivalent pathways
+                            occurrences = []
+                            codes = []
+                            for p in range(0, len(pathways)):
+                                path1 = pathways[p]
+                                for q in range(0, len(pathways)):
+                                    path2 = pathways[q]
+                                    if path1.region_of_interest == path2.region_of_interest and\
+                                            path1.consequent == path2.consequent:
+                                        code = ''.join(path1.region_of_interest) + path1.consequent
+                                        occurrences += [(p, code)]
+                                        codes += [code] if code not in codes else []
+                            occurrences = [list(filter(lambda x: x[1] == code, occurrences))[0] for code in codes]
+                            pathways = [pathways[p[0]] for p in occurrences]
+                            # Validation
+                            if i == len(graph.index) - 1:
+                                iter_count += 1
+                                if iter_count >= max_iterations:
+                                    condition_result = False
+                                    break
+                                if len(pathways) != n_pathways:
+                                    i = 0
+                                    n_pathways = len(pathways)
+                                    continue
+                            i += 1
+                    except ValueError:
+                        # If the map of the INPUT is altered the simulation is not valid. Likewise, if we enter in a
+                        # cyclic resolution of the conflicts, the simulation is not valid.
+                        condition_result = False
                     # Check the condition and add the new result
                     if condition_result:
                         result = {'network': initial_network, 'pathways': pathways}

@@ -37,7 +37,7 @@ class Result:
             codes = ['$']
             [codes.append(f'{str(hex(int("".join(pathway.region_of_interest), 2)))}:{pathway.consequent}|')
              for pathway in self.pathways]
-            code = ''.join(codes) + f'{net}|$'
+            code = ''.join(codes) + '$'
         else:
             code = self.code
         return code

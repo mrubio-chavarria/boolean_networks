@@ -4,7 +4,7 @@ DESCRIPTION:
 In this script we test all the functions developed. 
 """
 
-import numpy as np 
+import numpy as np
 import pandas as pd
 from utils.ncbf import ncbfCalc, conflict_ncbfCalc, networksCalc, netValidator, netFilter
 import ast

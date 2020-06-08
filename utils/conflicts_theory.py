@@ -76,6 +76,7 @@ class ConflictsManager:
         # Initial parameters
         working_group = []
         current_inhibitors = []
+        limit = 100
         # Add the following group of the last iteration
         [self.activators.append(path) if path.activator else self.inhibitors.append(path)
          for path in self.following_group['inhibitors'] + self.following_group['activators']]
@@ -121,6 +122,9 @@ class ConflictsManager:
             self.launch_algorithm()
         else:
             completed_activators = [False]*len(self.activators)
+            if len(self.activators + self.inhibitors) > limit:
+                # If we enter into a cyclic generation of pathways we are to stop. TO BE IMPROVED.
+                raise ValueError
             for i in range(0, len(self.activators)):
                 unregistered_inhibitors = list(
                     filter(lambda x: x not in self.registry[self.activators[i].id], self.inhibitors)
@@ -286,7 +290,7 @@ class Pathway:
         self.map = {''.join([str(var) for var in vs_set.values()]): self.eval_expression(vs_set)
                     for vs_set in variables_set}
         self.region_of_interest = list(sorted([key for key in self.map.keys() if self.map[key]]))
-        self.code = f'${"".join(self.region_of_interest)}:{self.antecedent+self.consequent}$'
+        self.code = f'${"".join(self.region_of_interest)}:{self.consequent}$'
 
 
 class Conflict:
