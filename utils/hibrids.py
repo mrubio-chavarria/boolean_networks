@@ -5,7 +5,7 @@ class Result:
     A class built to store the results of the simulation.
     """
 
-    def __init__(self, network, pathways, maps_set, conflicts, simulation, iterations):
+    def __init__(self, network, pathways, maps_set, conflicts, simulation, iterations, expressions, attractors):
         """
         DESCRIPTION:
         Constructor to the Result class.
@@ -14,7 +14,9 @@ class Result:
         :param conflicts: [list] objects conflict, the record of the simulation.
         :param maps_set: [KMap] the set of maps employed during the simulation.
         :param simulation: [int] identifier of the simulation.
-        :parm iterations: [int] number of the iterations performed.
+        :param iterations: [int] number of the iterations performed.
+        :param expressions: [list] final expressions of the net in boolnet format.
+        :param attractors: [dict] all the attractors of the network, steady and cyclic.
         """
         self.network = network
         self.pathways = None
@@ -25,6 +27,8 @@ class Result:
         self.code = self.get_code()
         self.iterations = iterations
         self.simulation = simulation
+        self.expressions = expressions
+        self.attractors = attractors
 
     def get_code(self):
         """

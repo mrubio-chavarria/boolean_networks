@@ -5,6 +5,8 @@ import pandas as pd
 from utils.utils import Term
 from utils.Kmap import Minterms
 import random
+import sympy
+from sympy.logic import SOPform
 from uuid import uuid4
 
 
@@ -375,7 +377,7 @@ class Conflict:
                         ''.join(str_gen(len(self.graph.index) - len(bin(i).split('b')[1]))) + bin(i).split('b')[1]
                         for i in range(0, 2 ** len(self.graph.index))]
         variables = [{self.graph.index[i]: int(comb[i]) for i in range(0, len(comb))} for comb in combinations]
-        # Simplify psi
+        # Simplify psi: THIS SECTION IS TO BE UPDATED TO THE NEW SIMPLIFICATION METHOD
         psi = [Term(value) for value in list(self.psi)]
         psi = Minterms(psi)
         psi.simplify()
@@ -456,15 +458,11 @@ class Conflict:
                     if high_pathway.eval_expression(variable)]
         base_map.maps.at[high_pathway.consequent, minterms] = high_pathway.activator
         positions = base_map.maps.loc[high_pathway.consequent, :]
-        positions = positions[positions != high_pathway.activator].index
-        minterms = [Term(minterm) for minterm in positions]
-        minterms = Minterms(minterms)
-        minterms.simplify()
-        s = [str(term) for term in minterms.result]
+        minterms = positions[positions != high_pathway.activator].index
+        simplified_minterms = simplificate(list(self.graph.index), minterms)
         # Select the most advantageous term
         # TO BE IMPLEMENTED. By this time it is only selected a random term.
-        word = random.choice(s)
-        minterm = f"{'&'.join([self.graph.index[i] if word[i] == '1' else '!' + self.graph.index[i] for i in range(0, len(word)) if word[i] != '*'])}"
+        minterm = random.choice(simplified_minterms)
         # Generate new pathways
         r = re.compile('\w')
         for var in minterm.split('&'):
@@ -555,6 +553,33 @@ class KMap:
                                              not variables[factor[1]] == 1 for factor in factors]))
         return final_values
 
+    def modificate_maps(self, pathways):
+        """
+        DESCRIPTION:
+        A method to modificate the set of map through the direct introduction of a set of pathways
+        :param pathways: [list] pathways to be implemented over the map. Without any conflict. Directly.
+        """
+        def aux_fun(pathway):
+            self.maps.loc[pathway.consequent, list(pathway.region_of_interest)] = pathway.activator
+        list(map(aux_fun, pathways))
+
+    def get_expressions(self):
+        """
+        DESCRIPTION:
+        A function to extract the expressions stored in the maps set.
+        :return: the expressions in BoolNet format of the nodes encoded in the set of maps.
+        """
+        # Obtain the letters
+        nodes = self.maps.index
+        # Simplification with KMaps
+        expressions = []
+        for node in nodes:
+            minterms = self.maps.loc[node, :][lambda x: x].index
+            simplified_minterms = simplificate(list(self.graph.index), minterms)
+            expression = node + ', ' + '|'.join(simplified_minterms)
+            expressions.append(expression)
+        return expressions
+
     def set_maps(self):
         """
         DESCRIPTION:
@@ -611,4 +636,16 @@ class KMap:
         return kmaps
 
 
+def simplificate(symbols, minterms):
+    """
+    DESCRIPTION:
+    A function that, given a set of minterm in binary form, simplifies the whole set into the minimal sum of products.
+    :param symbols: [list] variables (strings) representing the nodes.
+    :param minterms: [list] the whole group (strings) of minterms to be simplified.
+    :return: [list] products of the sum of products in boolnet format.
+    """
+    minterms = [[int(number) for number in list(minterm)] for minterm in minterms]
+    sop = str(SOPform(sympy.symbols(' '.join(symbols)), minterms)).replace('(', '').replace(')', '').replace(' ', '')\
+        .replace('~', '!').split('|')
+    return sop
 

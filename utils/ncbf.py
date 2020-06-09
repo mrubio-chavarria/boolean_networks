@@ -644,10 +644,10 @@ def netValidator(initial_networks, initial_graph, original_networks, original_gr
                 bar.update(i)
 
         # Set initial parameters of the similations
-        results = []
-        simulations = 5
-        max_iterations = 200
-        max_pathways = 64
+        results = {'accepted': [], 'dismissed': []}
+        simulations = 10
+        max_iterations = 2000
+        max_pathways = 640
 
         # Get all inputs
         inputs = [el for el in graph.index if graph.loc[el, 'activators'] == [''] and
@@ -754,16 +754,35 @@ def netValidator(initial_networks, initial_graph, original_networks, original_gr
                         condition_result = False
                     # Check the condition and add the new result
                     if condition_result:
-                        result = {'network': initial_network, 'pathways': pathways}
-                        if result not in results:
-                            results.append(Result(network=initial_network, pathways=pathways, maps_set=base_map,
-                                                  conflicts=conflicts, simulation=m, iterations=iter_count))
+                        # Apply all the pathways over the map
+                        base_map.modificate_maps(pathways)
+                        # Get the expression from the maps
+                        expressions = base_map.get_expressions()
+                        # Validation with the attractors
+                        primes = FileExchange.bnet2primes('\n'.join(expressions))
+                        stg = StateTransitionGraphs.primes2stg(primes, "synchronous")
+                        steady, cyclic = Attractors.compute_attractors_tarjan(stg)
+                        result = Result(network=initial_network,
+                                        pathways=pathways,
+                                        maps_set=base_map,
+                                        conflicts=conflicts,
+                                        simulation=m,
+                                        iterations=iter_count,
+                                        expressions=expressions,
+                                        attractors={'steady': steady, 'cyclic': cyclic})
+                        condition = all([True if att in steady else False for att in attractors])
+                        # Add the result
+                        if condition:
+                            results['accepted'].append(result)
+                        else:
+                            results['dismissed'].append(result)
                 bar.update(m)
         print('Simulations completed')
         # Filtering for equivalent results
         codes = []
         final_results = []
-        [(codes.append(result.code), final_results.append(result)) for result in results if result.code not in codes]
+        [(codes.append(result.code), final_results.append(result)) for result in results['accepted']
+         if result.code not in codes]
         return final_results
 
     """ This is for the first validation

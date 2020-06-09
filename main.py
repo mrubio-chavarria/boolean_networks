@@ -24,10 +24,11 @@ def main():
     columns = ['expressions', 'activated', 'inhibited']
     content = [[['B', 'C'], ['C'], ['B']], [['A', 'B', 'C'], ['A'], ['']]]
     fixed_conflicts_data = pd.DataFrame(data=content, index=index, columns=columns)
+
     # Introduce the example of Huang
-    index = ['I', 'S', 'T', 'D', 'Z']
+    index = ['I', 'S', 'T', 'Z', 'D']
     columns = ['activators', 'inhibitors']
-    content = [[[''], ['']], [['I'], ['S', 'T']], [[''], ['S', 'Z']], [['D'], ['S', 'Z']], [['S', 'Z'], ['D']]]
+    content = [[[''], ['']], [['I'], ['S', 'T']], [[''], ['S', 'Z']], [['S', 'Z'], ['D']], [['D'], ['S', 'Z']]]
     initial_data = pd.DataFrame(data=content, index=index, columns=columns)
 
     # Unfixed conflicts graphs
@@ -51,7 +52,7 @@ def main():
         unfixed_sets_conflicts_networks.append(list(networksCalc(set_paths)))
 
     # Return the set of networks which meet the condition
-    attractors = ['1101', '0010']
+    attractors = ['00101', '11011', '11010']
     final_networks = netValidator(initial_networks, initial_data, original_networks, original_data, attractors,
                                   unfixed_sets_conflicts_networks, unfixed_conflicts_graphs, fixed_conflicts_data, tags)
 
