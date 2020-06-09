@@ -645,7 +645,7 @@ def netValidator(initial_networks, initial_graph, original_networks, original_gr
 
         # Set initial parameters of the similations
         results = []
-        simulations = 100
+        simulations = 5
         max_iterations = 200
         max_pathways = 64
 
@@ -749,6 +749,9 @@ def netValidator(initial_networks, initial_graph, original_networks, original_gr
                         # If the map of the INPUT is altered the simulation is not valid. Likewise, if we enter in a
                         # cyclic resolution of the conflicts, the simulation is not valid.
                         condition_result = False
+                    except RecursionError:
+                        # Another situation in which the error algorithm takes too many iterations.
+                        condition_result = False
                     # Check the condition and add the new result
                     if condition_result:
                         result = {'network': initial_network, 'pathways': pathways}
@@ -786,9 +789,8 @@ def blosum_generator(graph):
     :param graph: [pandas Dataframe] the graph to whom we aim to produce the matrix.
     :return: the randomly generated matrix.
     """
-    labels = [''.join(it) for sl in
-              [combinations(graph.index, i) for i in range(1, len(graph.index) + 1)]
-              for it in sl]
+    labels = [''.join(sorted(it)) for sl
+              in [combinations(graph.index, i) for i in range(1, len(graph.index) + 1)] for it in sl]
     content = [random.sample(range(1, 2 * len(labels) * len(labels) + 1), len(labels)) for row in labels]
     content = [[0 if i == j else content[i][j] for j in range(0, len(content[i]))] for i in range(0, len(content))]
     blosum = pd.DataFrame(data=content, index=labels, columns=labels)

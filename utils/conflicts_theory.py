@@ -41,6 +41,7 @@ class ConflictsManager:
         self.registry = {}
         self.conflicts = conflicts
         self.following_group = {'activators': [], 'inhibitors': []}
+        self.algorithm_counter = 0
         if self.activators != [] and self.inhibitors != []:
             self.set_registry()
             self.launch_algorithm()
@@ -76,7 +77,21 @@ class ConflictsManager:
         # Initial parameters
         working_group = []
         current_inhibitors = []
-        limit = 100
+        pathways_limit = 100
+        counter_limit = 100
+        # Delete repeated pathways in activators, inhibitors and extra_pathways
+        codes = []
+        activators = []
+        inhibitors = []
+        extra = []
+        [(codes.append(pathway.code), activators.append(pathway))
+         if pathway.activator else (codes.append(pathway.code), inhibitors.append(pathway))
+         for pathway in self.activators + self.inhibitors if pathway.code not in codes]
+        [(codes.append(pathway.code), extra.append(pathway)) for pathway in self.extra_pathways
+         if pathway.code not in codes]
+        self.activators = activators
+        self.inhibitors = inhibitors
+        self.extra_pathways = extra
         # Add the following group of the last iteration
         [self.activators.append(path) if path.activator else self.inhibitors.append(path)
          for path in self.following_group['inhibitors'] + self.following_group['activators']]
@@ -119,10 +134,13 @@ class ConflictsManager:
             # Register the new pathways
             self.set_registry()
             # New pathways, launch again the algorithm
+            self.algorithm_counter += 1
+            if self.algorithm_counter > counter_limit:
+                raise RecursionError
             self.launch_algorithm()
         else:
             completed_activators = [False]*len(self.activators)
-            if len(self.activators + self.inhibitors) > limit:
+            if len(self.activators + self.inhibitors) > pathways_limit:
                 # If we enter into a cyclic generation of pathways we are to stop. TO BE IMPROVED.
                 raise ValueError
             for i in range(0, len(self.activators)):
@@ -133,6 +151,9 @@ class ConflictsManager:
                     completed_activators[i] = True
             if not all(completed_activators):
                 # There pathways to compare, launch the algorithm again
+                self.algorithm_counter += 1
+                if self.algorithm_counter > counter_limit:
+                    raise RecursionError
                 self.launch_algorithm()
 
     def get_solution(self):

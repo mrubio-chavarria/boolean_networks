@@ -24,9 +24,10 @@ def main():
     columns = ['expressions', 'activated', 'inhibited']
     content = [[['B', 'C'], ['C'], ['B']], [['A', 'B', 'C'], ['A'], ['']]]
     fixed_conflicts_data = pd.DataFrame(data=content, index=index, columns=columns)
-    index = ['A', 'B', 'C', 'D', 'E']
+    # Introduce the example of Huang
+    index = ['I', 'S', 'T', 'D', 'Z']
     columns = ['activators', 'inhibitors']
-    content = [[['D', 'E'], ['']], [['A'], ['']], [[''], ['A']], [['B'], ['C']], [[''], ['']]]
+    content = [[[''], ['']], [['I'], ['S', 'T']], [[''], ['S', 'Z']], [['D'], ['S', 'Z']], [['S', 'Z'], ['D']]]
     initial_data = pd.DataFrame(data=content, index=index, columns=columns)
 
     # Unfixed conflicts graphs
