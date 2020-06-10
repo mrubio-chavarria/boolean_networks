@@ -645,7 +645,7 @@ def netValidator(initial_networks, initial_graph, original_networks, original_gr
 
         # Set initial parameters of the similations
         results = {'accepted': [], 'dismissed': []}
-        simulations = 10
+        simulations = 2100
         max_iterations = 2000
         max_pathways = 640
 

@@ -46,6 +46,7 @@ class ConflictsManager:
         self.algorithm_counter = 0
         if self.activators != [] and self.inhibitors != []:
             self.set_registry()
+            # list(self.conflicts_resolution_algorithm())
             self.launch_algorithm()
 
     def set_registry(self, duple=None):
@@ -157,6 +158,26 @@ class ConflictsManager:
                 if self.algorithm_counter > counter_limit:
                     raise RecursionError
                 self.launch_algorithm()
+
+    def conflicts_resolution_algorithm(self, activators=None, inhibitors=None, following=None):
+        """
+        DESCRIPTION:
+        The improved version of the algorithm above.
+        :return: [list] final set of pathways.
+        """
+        if activators is not None and inhibitors is not None:
+            # Case in which we are inside the nested iteration
+            pairs = pd.DataFrame(columns=['activators', 'inhibitors'])
+            for activator in activators:
+                pass
+        else:
+            # Case in which the method is called for the first time
+            # Get the initial parameters
+            activators = self.activators[:]
+            inhibitors = self.inhibitors[:]
+            # Solve
+            yield from self.conflicts_resolution_algorithm(activators=activators, inhibitors=inhibitors)
+
 
     def get_solution(self):
         """
