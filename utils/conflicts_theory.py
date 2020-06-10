@@ -81,7 +81,7 @@ class ConflictsManager:
         working_group = []
         current_inhibitors = []
         pathways_limit = 100
-        counter_limit = 100
+        counter_limit = 1000
         # Delete repeated pathways in activators, inhibitors and extra_pathways
         codes = []
         activators = []
@@ -96,8 +96,8 @@ class ConflictsManager:
         self.inhibitors = inhibitors
         self.extra_pathways = extra
         # Add the following group of the last iteration
-        [self.activators.append(path) if path.activator else self.inhibitors.append(path)
-         for path in self.following_group['inhibitors'] + self.following_group['activators']]
+        [self.activators.append(pathway) if pathway.activator else self.inhibitors.append(pathway)
+         for pathway in self.following_group['inhibitors'] + self.following_group['activators']]
         self.following_group['activators'] = []
         self.following_group['inhibitors'] = []
         # Set the working group
@@ -111,6 +111,7 @@ class ConflictsManager:
             working_group.append((act, inh))
         if not self.activators:  # it wont happen
             self.following_group['inhibitors'].extend(self.inhibitors)
+        # Set the non-paired inhibitors in the next round
         [self.following_group['inhibitors'].append(inh) for inh in self.inhibitors if inh not in current_inhibitors]
         # Solve the conflicts
         new_pathways = []
@@ -310,7 +311,6 @@ class Pathway:
                 response = all(map(condition, minterm))
             return response
 
-        values = []
         r = re.compile(r'\!\([^\)]+\)|\w(?![^(]*\))|[!](?=\w)')
         minterms = [item for item in r.findall(self.expression)]
         for i in range(0, len(minterms)):
@@ -461,6 +461,8 @@ class Conflict:
                         ''.join(str_gen(len(self.graph.index) - len(bin(i).split('b')[1]))) + bin(i).split('b')[1]
                         for i in range(0, 2 ** len(self.graph.index))]
         variables = [{self.graph.index[i]: int(comb[i]) for i in range(0, len(comb))} for comb in combinations]
+        # Obtain the inputs
+        inputs = [self.graph.index[i] for i in range(0, len(initial_network)) if initial_network[i] == 'INPUT']
         # Simplify psi
         psi = [Term(value) for value in list(self.psi)]
         psi = Minterms(psi)
@@ -483,9 +485,11 @@ class Conflict:
         simplified_minterms = simplificate(list(self.graph.index), minterms)
         # Select the most advantageous term
         # TO BE IMPLEMENTED. By this time it is only selected a random term.
-        minterm = random.choice(simplified_minterms)
-        # Generate new pathways
         r = re.compile('\w')
+        valid_minterms = [minterm for minterm in simplified_minterms
+                          if not any([True if letter in inputs else False for letter in r.findall(minterm)])]
+        minterm = random.choice(valid_minterms)
+        # Generate new pathways
         for var in minterm.split('&'):
             if var[0] == '!':
                 var = var[1]
@@ -497,6 +501,8 @@ class Conflict:
             new_pathways.append(Pathway(antecedent=antecedent, consequent=var, activator=activator, space=variables))
         # Send the pathways
         new_pathways.append(high_pathway)
+        # Modificate the map with the new pathways
+        base_map.modificate_maps(new_pathways)
         return new_pathways
 
 

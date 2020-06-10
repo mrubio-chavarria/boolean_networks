@@ -520,8 +520,8 @@ def conflicts_manager(net, conflicts_networks, conflicts_graph, tags):
         yield networks_set
 
 
-def netValidator(initial_networks, initial_graph, original_networks, original_graph, attractors,
-                 unfixed_sets_conflicts_networks, unfixed_conflicts_graphs, fixed_conflicts_graph, tags):
+def netValidator(initial_networks=None, initial_graph=None, original_networks=None, original_graph=None, attractors=None,
+                 unfixed_sets_conflicts_networks=None, unfixed_conflicts_graphs=None, fixed_conflicts_graph=None, tags=None):
     """
     DESCRIPTION:
     Given a function and an attractor, it is returned whether the function meets the attractors condition or not.
@@ -645,7 +645,7 @@ def netValidator(initial_networks, initial_graph, original_networks, original_gr
 
         # Set initial parameters of the similations
         results = {'accepted': [], 'dismissed': []}
-        simulations = 2100
+        simulations = 20
         max_iterations = 2000
         max_pathways = 640
 
@@ -680,29 +680,6 @@ def netValidator(initial_networks, initial_graph, original_networks, original_gr
                             [node_pathways['activators'].append(pathway) if pathway.activator
                              else node_pathways['inhibitors'].append(pathway) for pathway in pathways
                              if pathway.consequent == node]
-                            """
-                            # Temporary conflicts procedure
-                            # ------------------------------------------------------------------------------------------
-                            # Start the conflict management
-                            old_pathways = pathways[:]
-                            if node_pathways['activators'] == [] or node_pathways['inhibitors'] == []:
-                                i += 1
-                                continue
-                            # Calculate and solve the conflicts
-                            groups = itertools.product(node_pathways['activators'], node_pathways['inhibitors'], repeat=1)
-                            try:
-                                to_be_deleted = []
-                                [(to_be_deleted.append(solution[0]), conflicts.append(solution[1])) for solution
-                                 in list(map(conflicts_manager, groups)) if solution is not None]
-                            except StopIteration:
-                                print('Exceeded limit in the number of pathways. Terminate.')
-                                condition_result = False
-                                break
-                            pathways = list(filter(lambda x: x not in to_be_deleted, pathways))
-                            # ------------------------------------------------------------------------------------------
-                            """
-                            # Testing conflicts procedure
-                            # ------------------------------------------------------------------------------------------
                             # Solve the conflicts
                             pathways = list(filter(lambda x: x.consequent != node, pathways))
                             manager = ConflictsManager(activators=node_pathways['activators'],
@@ -715,7 +692,6 @@ def netValidator(initial_networks, initial_graph, original_networks, original_gr
                                                        node=node)
                             pathways.extend(manager.get_solution())
                             pathways.sort(key=lambda x: x.consequent)
-                            # ------------------------------------------------------------------------------------------
                             # INPUT validation:
                             # There cannot be any pathway with an input in the consequent
                             if len(pathways) != len(list(filter(lambda x: x.consequent not in inputs, pathways))):
@@ -748,6 +724,9 @@ def netValidator(initial_networks, initial_graph, original_networks, original_gr
                     except ValueError:
                         # If the map of the INPUT is altered the simulation is not valid. Likewise, if we enter in a
                         # cyclic resolution of the conflicts, the simulation is not valid.
+                        condition_result = False
+                    except IndexError:
+                        # The same situation of the INPUT, at the time of selecting destiny nodes.
                         condition_result = False
                     except RecursionError:
                         # Another situation in which the error algorithm takes too many iterations.
