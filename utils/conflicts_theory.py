@@ -22,7 +22,7 @@ class ConflictsManager:
     def __init__(self, activators, inhibitors, priority_matrix, graph, conflicts, network, base_map, node):
         """
         DESCRIPTION:
-        Constructor of the class.
+        Builder of the class.
         :param activators: [list] pathways to be considered as activators.
         :param inhibitors: [list] pathways to be considered as inhibitors.
         :param priority_matrix: [pandas DataFrame] matrix with the priority to solve the conflicts.
@@ -221,7 +221,7 @@ class Pathway:
     def __init__(self, antecedent, consequent, activator, space=None, expression=None):
         """
         DESCRIPTION:
-        Constructor of the object.
+        Builder of the object.
         :param antecedent: [string] left side of the equation which describes the pathway. Condition.
         :param consequent: [string] right side of the equation which describes the pathway. Result of the condition.
         :param activator: [boolean] Variable to store if the relation among sides if activatory or inhibitory.
@@ -347,7 +347,7 @@ class Conflict:
     def __init__(self, first_pathway, second_pathway, priority_matrix, psi, graph):
         """
         DESCRIPTION:
-        Constructor of the object.
+        Builder of the object.
         :param first_pathway: [pathway] The first pathway interfering in the conflict.
         :param second_pathway: [pathway] The second pathway interfering in the conflict.
         :param priority_matrix: [pandas DataFrame] Matrix with the scores to solve the conflict.
@@ -516,7 +516,7 @@ class KMap:
     def __init__(self, network, graph):
         """
         DESCRIPTION:
-        Constructor of the object.
+        Builder of the object.
         :param network: [list] the structure in which the graph nodes are distributed.
         :param graph: [pandas DataFrame] description of the whole set of pathways from which the network comes.
         """

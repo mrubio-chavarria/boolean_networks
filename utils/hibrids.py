@@ -8,7 +8,7 @@ class Result:
     def __init__(self, network, pathways, maps_set, conflicts, simulation, iterations, expressions, attractors):
         """
         DESCRIPTION:
-        Constructor to the Result class.
+        Builder to the Result class.
         :param network: [list] the structured network employed.
         :param pathways: [list] objects pathway, the result of the simulation.
         :param conflicts: [list] objects conflict, the record of the simulation.

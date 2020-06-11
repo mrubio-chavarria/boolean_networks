@@ -21,6 +21,7 @@ def main():
     columns = ['activators', 'inhibitors']
     content = [[[''], ['']], [['I'], ['S', 'T']], [[''], ['S', 'Z']], [['S', 'Z'], ['D']], [['D'], ['S', 'Z']]]
     initial_data = pd.DataFrame(data=content, index=index, columns=columns)
+
     # Generate the graph object
     graph = Graph(initial_data=initial_data)
 
