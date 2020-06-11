@@ -96,6 +96,7 @@ class Graph:
                     codes[index][j] = str(new_row)
                     yield new_row
 
+        # Make all the virtual networks with the roles tables
         tables = [node.roles_table.groupby('node') for node in self.get_nodes()]
         tables = [[it for sl in [table.get_group(group).values.tolist() for group in table.groups] for it in sl]
                   for table in tables]
@@ -111,8 +112,9 @@ class Graph:
         tables = list(aux_funIII(tables))
         combinations = tables[0]
         for i in range(1, len(tables)):
-            combinations = list(itertools.product(combinations, tables[i], repeat=2))
-            print()
+            combinations = [[it for sl in group for it in sl] for group in list(itertools.product(combinations,
+                                                                                                  tables[i], repeat=1))]
+        print()
 
         return 3
 
