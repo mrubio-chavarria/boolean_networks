@@ -1,6 +1,7 @@
 
 import uuid
 import pytictoc
+import progressbar
 from functools import reduce
 from utils.conflicts_theory import Pathway, KMap, ConflictsManager
 from utils.hibrids import Result
@@ -76,16 +77,18 @@ class Validation:
                     else:
                         yield Pathway(antecedent=el, consequent=self.nodes[i], activator=False, space=self.get_space())
 
-    def third_validation(self, simulations=20, max_iterations=2000, max_pathways=6400):
+    def third_validation(self, bar, simulations=20, max_iterations=2000, max_pathways=6400):
         """
         DESCRIPTION:
         The mechanism of validation to obtain the corrected maps with all the generated pathways according to the given,
         initial, map.
+        :param bar: [progressbar] the bar to keep the display of the progress updated.
         :param simulations: [int] parameter to set the number of simulations to perform.
         :param max_iterations: [int] parameter to set the maximum number of iterations all around the network.
         :param max_pathways: [int] parameter to set the maximum number of pathways.
         """
         # Validate each variant
+        counter = 0
         for variant in self.variants:
             # Obtain the initial set of pathways from the graph
             initial_pathways = list(self.get_initial_pathways(variant=variant))
@@ -165,6 +168,9 @@ class Validation:
                     except RecursionError:
                         # Another situation in which the error algorithm takes too many iterations.
                         condition_result = False
+                    # Update progress
+                    bar.update(counter)
+                    counter += 1
                     # Check the condition and add the new result
                     if condition_result:
                         # Apply all the pathways over the map
@@ -185,10 +191,6 @@ class Validation:
                                         attractors={'steady': steady, 'cyclic': cyclic})
                         # Set if the result has been successful and return it
                         result.accepted = all([True if att in steady else False for att in self.attractors])
-                        # Set constance
-                        file = open('records.txt', 'a')
-                        file.write(result.get_serialized_data())
-                        file.close()
                         yield result
 
     def execute_validation(self):
@@ -206,7 +208,11 @@ class Validation:
             pass
         if self.type == 'III':
             # Third method of validation
-            results = list(self.third_validation())
+            simulations = 20
+            variants_networks = sum([len(variant.get_networks()) for variant in self.variants])
+            total_networks = len(self.variants) * variants_networks * simulations
+            with progressbar.ProgressBar(max_value=total_networks) as bar:
+                results = list(self.third_validation(bar, simulations=simulations))
         return results
 
 
