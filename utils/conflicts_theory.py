@@ -513,25 +513,28 @@ class KMap:
     """
 
     # Methods
-    def __init__(self, network, graph):
+    def __init__(self, network, graph, roles_set=None, inputs=None):
         """
         DESCRIPTION:
         Builder of the object.
         :param network: [list] the structure in which the graph nodes are distributed.
         :param graph: [pandas DataFrame] description of the whole set of pathways from which the network comes.
+        :param roles_set: [list] the set of roles (canalizing and canalized value) for every node in the expressions.
         """
         self.network = network
         self.graph = graph
+        self.inputs = [node.name for node in inputs]
+        self.roles_set = roles_set
         self.maps = self.set_maps()
 
     def eval_expression(self, variables_set, expressions):
         """
         DESCRIPTION:
-        An eval method to assess the expression of a set of expressions related with the nodes. Therefore, these
+        An eval method to assess every expression related to the nodes. Therefore, these
         expressions show a specific structure. It is not a general-purpose eval method.
         :param variables_set: [list] dicts with the combinations of variables to be assessed.
-        :param expressions: [list] boolean functions to be assessed with the structure given by Murrugarra2013 in Boolnet
-        notation.
+        :param expressions: [list] boolean functions to be assessed with the structure given by Murrugarra2013 in
+        Boolnet notation.
         :return: [pandas DataFrame] all the functions associated to the nodes with the result for every variables
         combination.
         """
@@ -548,6 +551,7 @@ class KMap:
 
         final_values = []
         for expression in expressions:
+            print()
             for variables in variables_set:
                 # Manage the parentheses
                 if '(' in expression:
@@ -575,6 +579,7 @@ class KMap:
                     expr = [expr[i] for i in range(0, len(expr)) if expr[i] != '!']
                     final_values.append(all(expr))
                 else:
+                    # Revision pending to be REVISED
                     factors = expression.split('&')
                     final_values.append(all([variables[factor[0]] == 1 if factor[0] != '!' else
                                              not variables[factor[1]] == 1 for factor in factors]))
@@ -618,6 +623,18 @@ class KMap:
             for i in range(0, n):
                 yield '0'
 
+        def get_symbol(source, letter):
+            """
+            DESCRIPTION:
+            It is here where the role is introduced.
+            """
+            symbol = '!'
+            if self.roles_set is not None:
+                canalizing_value = list(filter(lambda x: x[0] == source and x[1] == letter, self.roles_set))[0][2]
+                symbol = '!' if canalizing_value == 1 else ''
+            return symbol
+
+        # Parameters
         combinations = [bin(i).split('b')[1] if len(bin(i).split('b')[1]) == len(self.graph.index) else
                         ''.join(str_gen(len(self.graph.index) - len(bin(i).split('b')[1]))) + bin(i).split('b')[1]
                         for i in range(0, 2 ** len(self.graph.index))]
@@ -635,14 +652,14 @@ class KMap:
             m_step = min(steps)
             first_letter = list(self.network[i][m_step])[0]
             for j in steps:
-                layer = list(reversed(self.network[i][j]))
+                layer = self.network[i][j]
                 # Calculate the whole load
                 if len(layer) == 1:
-                    level = '!' + layer[0]
+                    level = get_symbol(source=self.graph.index[i], letter=layer[0]) + layer[0]
                 else:
-                    level = layer[0]
+                    level = get_symbol(source=self.graph.index[i], letter=layer[0]) + layer[0]
                     for letter in layer[1::]:
-                        level = '!' + letter + '&!' + level
+                        level = get_symbol(source=self.graph.index[i], letter=letter) + letter + '&' + level
                 # Add inner load
                 level = level + '&' + load if load != '' else level
                 # Add the header
@@ -653,8 +670,7 @@ class KMap:
             network.append(load)
         # Build the map
         values = self.eval_expression(variables, network)
-        values = [values[int(i*len(values)/len(self.graph.index)):int((i+1)*len(values)/len(self.graph.index))]
-                  for i in range(0, len(self.graph.index))]
+        values = [values[int(i*len(values)/len(self.graph.index)):int((i+1)*len(values)/len(self.graph.index))] for i in range(0, len(self.graph.index))]
         index = self.graph.index
         columns = combinations
         # Change and send the map

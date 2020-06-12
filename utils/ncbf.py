@@ -266,9 +266,9 @@ def ncbfCalc(data, tags):
     """
     DESCRIPTION:
     With this function, given a graph, we obtain all the possible NCBFs.
-    :param data: a dataframe with the representation of the network. One row per node, first column for activators and
+    :param data: [pandas DataFrame] with the representation of the network. One row per node, first column for activators and
     second for inhibitors.
-    :return: all possible NCBF for each gene according with the structure presented in Murrugarra 2013 for NCBF.
+    :return: [pandas Series] all possible NCBF for each gene according with the structure presented in Murrugarra 2013 for NCBF.
     """
     paths = []
     for index, row in data.iterrows():
@@ -283,8 +283,8 @@ def conflict_ncbfCalc(variables, tag):
     """
     DESCRIPTION:
     It does the same as the function above but with all possible combinations in groups of the given variables.
-    :param variables: a dataframe with the variables of the network. One row per node.
-    :return: all possible NCBF for each gene according with the structure presented in Murrugarra 2013 for NCBF.
+    :param variables: [pandas DataFrame] variables of the network. One row per node.
+    :return: [tuple] all possible NCBF for each gene according with the structure presented in Murrugarra 2013 for NCBF.
     """
     # Auxiliary functions
     def aux_i(node):
@@ -612,19 +612,6 @@ def netValidator(initial_networks=None, initial_graph=None, original_networks=No
             for i in range(0, n):
                 yield '0'
 
-        def conflicts_manager(group):
-            # Pathways validation
-            if len(pathways) >= max_pathways:
-                raise StopIteration
-            act_roi = set(group[0].region_of_interest)
-            inh_roi = set(group[1].region_of_interest)
-            psi = act_roi & inh_roi
-            if len(psi) > 0:
-                conflict = Conflict(group[0], group[1], blosum, psi, graph)
-                solution = conflict.solve(initial_network, base_map)
-                pathways.extend(solution['add'])
-                return solution['delete'], conflict
-
         # All possible variables combinations
         print('Initializing parameters and pathways')
         combinations = [bin(i).split('b')[1] if len(bin(i).split('b')[1]) == len(graph.index) else
@@ -764,7 +751,7 @@ def netValidator(initial_networks=None, initial_graph=None, original_networks=No
          if result.code not in codes]
         return final_results
 
-    """ This is for the first validation
+    """ This is necessary for the first validation
     # Extend the original networks and execute the validation
     num_sets_conflicts_networks = len(unfixed_sets_conflicts_networks)
     assessed_networks = []
@@ -777,7 +764,7 @@ def netValidator(initial_networks=None, initial_graph=None, original_networks=No
     # Extend the original networks with the errors with fixed structure
     final_networks = third_validation(initial_graph)
 
-    return 3
+    return final_networks
 
 
 def blosum_generator(graph):

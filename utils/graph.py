@@ -3,6 +3,7 @@ import pandas as pd
 import uuid
 import itertools
 from utils.ncbf import ncbfCalc, networksCalc
+from utils.validation import Validation
 import progressbar
 
 
@@ -31,8 +32,11 @@ class Graph:
         self.roles_combinations = self.get_roles_combinations()
         # Set the variants of the network
         print('Start variants generation')
-        self.variants = self.get_variants()
+        self.variants = self.get_variants(limit=30)
         print('Variants generation completed')
+        print('Launch the validation of the networks')
+        self.validation = Validation(variants=self.variants, nodes=[node.name for node in self.get_nodes()],
+                                     inputs=self.inputs)
         print()
 
     def __str__(self):
@@ -129,14 +133,15 @@ class Graph:
 
         return combinations
 
-    def get_variants(self):
+    def get_variants(self, limit=None):
         """
         DESCRIPTION:
         A method to obtain all the variants of the graph.
+        :param limit: [int] number of variants to which the generation can be limited.
         :return: [list] associated variants.
         """
         if 'variants' not in dir(self):
-            variants = list(self.variants_generator())
+            variants = list(self.variants_generator(limit))
             self.variants = variants
         return self.variants
 
@@ -166,13 +171,15 @@ class Graph:
         # Set the roles table of every node
         [node.set_roles_table() for node in self.get_nodes()]
 
-    def variants_generator(self):
+    def variants_generator(self, limit=None):
         """
         DESCRIPTION:
         A method to generate all the variants associated with the graph.
+        :param limit: [int] number of variants to which the generation can be limited.
         """
         inputs_names = [node.name for node in self.get_inputs()]
         roles_combinations = self.get_roles_combinations()
+        roles_combinations = roles_combinations[0:limit] if limit is not None else roles_combinations
         with progressbar.ProgressBar(max_value=len(roles_combinations)) as bar:
             for i in range(0, len(roles_combinations)):
                 yield Variant(roles=roles_combinations[i], initial_data=self.initial_data, inputs=inputs_names)
