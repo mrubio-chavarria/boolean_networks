@@ -23,7 +23,8 @@ def main():
     initial_data = pd.DataFrame(data=content, index=index, columns=columns)
 
     # Generate the graph object
-    graph = Graph(initial_data=initial_data)
+    attractors = ['00101', '11011', '11010']
+    graph = Graph(initial_data=initial_data, attractors=attractors)
 
     # Get another DataFrame with all the possible ncbf.
     tags = ['activators', 'inhibitors']
@@ -33,7 +34,6 @@ def main():
     initial_networks = list(networksCalc(initial_paths))
 
     # Return the set of networks which meet the condition
-    attractors = ['00101', '11011', '11010']
     final_networks = netValidator(initial_networks=initial_networks, initial_graph=initial_data, tags=tags,
                                   attractors=attractors)
 

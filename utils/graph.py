@@ -15,16 +15,18 @@ class Graph:
     # Attributes
 
     # Methods
-    def __init__(self, initial_data):
+    def __init__(self, initial_data, attractors=None):
         """
         DESCRIPTION:
         Builder of the object graph.
         :param initial_data: [pandas DataFrame] data representing the initial data upon which the graph is built.
+        :param attractors: [list] strings containing the attractors for the validation.
         """
         # Set the attributes
         self.id = f'gr{uuid.uuid1()}'
         self.initial_data = initial_data
         self.nodes = self.get_nodes()
+        self.attractors = attractors
         # Establish the relationships between nodes
         self.set_adjustment()
         self.inputs = self.get_inputs()
@@ -36,7 +38,7 @@ class Graph:
         print('Variants generation completed')
         print('Launch the validation of the networks')
         self.validation = Validation(variants=self.variants, nodes=[node.name for node in self.get_nodes()],
-                                     inputs=self.inputs)
+                                     inputs=self.inputs, attractors=self.attractors)
         print()
 
     def __str__(self):

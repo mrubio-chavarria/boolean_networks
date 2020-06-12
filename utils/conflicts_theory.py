@@ -551,7 +551,6 @@ class KMap:
 
         final_values = []
         for expression in expressions:
-            print()
             for variables in variables_set:
                 # Manage the parentheses
                 if '(' in expression:
@@ -601,15 +600,18 @@ class KMap:
         A function to extract the expressions stored in the maps set.
         :return: the expressions in BoolNet format of the nodes encoded in the set of maps.
         """
-        # Obtain the letters
-        nodes = self.maps.index
-        # Simplification with KMaps
-        expressions = []
-        for node in nodes:
-            minterms = self.maps.loc[node, :][lambda x: x].index
-            simplified_minterms = simplificate(list(self.graph.index), minterms)
-            expression = node + ', ' + '|'.join(simplified_minterms)
-            expressions.append(expression)
+        try:
+            # Obtain the letters
+            nodes = self.maps.index
+            # Simplification with KMaps
+            expressions = []
+            for node in nodes:
+                minterms = self.maps.loc[node, :][lambda x: x].index
+                simplified_minterms = simplificate(list(self.graph.index), minterms)
+                expression = node + ', ' + '|'.join(simplified_minterms)
+                expressions.append(expression)
+        except:
+            print()
         return expressions
 
     def set_maps(self):
