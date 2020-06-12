@@ -1,3 +1,5 @@
+import json
+
 
 class Result:
     """
@@ -49,6 +51,17 @@ class Result:
             code = self.code
         return code
 
+    def get_serialized_data(self):
+        """
+        DESCRIPTION:
+        A method to return the serialized value of the result. A readable representation of the result to be introduced
+        in a file.
+        :return: [dictionary] representation of the result in JSON format.
+        """
+        return json.dumps({'network': str(self.network),
+                           'pathways': str([str(pathway) for pathway in self.pathways]),
+                           'accepted': str(self.accepted)})
+
     def set_pathways(self, pathways):
         """
         DESCRIPTION:
@@ -57,4 +70,6 @@ class Result:
         """
         pathways.sort(key=lambda x: x.consequent)
         self.pathways = pathways
+
+
 

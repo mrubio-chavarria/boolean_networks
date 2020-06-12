@@ -527,6 +527,16 @@ class KMap:
         self.roles_set = roles_set
         self.maps = self.set_maps()
 
+    def __str__(self):
+        """
+        DESCRIPTION:
+        A method to return a readable representation of the object.
+        :return: [string] readable representation of the object.
+        """
+        maps = str(self.maps)
+        roles = str(self.roles_set)
+        return f'Maps: {maps} Roles: {roles}'
+
     def eval_expression(self, variables_set, expressions):
         """
         DESCRIPTION:

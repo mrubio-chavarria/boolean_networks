@@ -185,6 +185,10 @@ class Validation:
                                         attractors={'steady': steady, 'cyclic': cyclic})
                         # Set if the result has been successful and return it
                         result.accepted = all([True if att in steady else False for att in self.attractors])
+                        # Set constance
+                        file = open('records.txt', 'a')
+                        file.write(result.get_serialized_data())
+                        file.close()
                         yield result
 
     def execute_validation(self):
