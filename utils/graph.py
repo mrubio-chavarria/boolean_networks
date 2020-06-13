@@ -2,9 +2,10 @@
 import pandas as pd
 import uuid
 import itertools
+from alive_progress import alive_bar
+from utils.conflicts_theory import KMap
 from utils.ncbf import ncbfCalc, networksCalc
 from utils.validation import Validation
-import progressbar
 
 
 class Graph:
@@ -22,9 +23,19 @@ class Graph:
         :param initial_data: [pandas DataFrame] data representing the initial data upon which the graph is built.
         :param attractors: [list] strings containing the attractors for the validation.
         """
+        # Auxiliary functions
+        def aux_fun():
+            with alive_bar(len(self.get_networks())) as bar:
+                for network in self.get_networks():
+                    if network.get_code() not in self.networks_codes:
+                        self.networks_codes.append(network.code)
+                        yield network
+                    bar()
+
         # Set the attributes
         self.id = f'gr{uuid.uuid1()}'
         self.initial_data = initial_data
+        self.networks_codes = []
         self.nodes = self.get_nodes()
         self.attractors = attractors
         # Establish the relationships between nodes
@@ -33,9 +44,15 @@ class Graph:
         # Obtain the roles over the basis structure
         self.roles_combinations = self.get_roles_combinations()
         # Set the variants of the network
-        print('Start variants generation')
+        print('Generating variants')
         self.variants = self.get_variants(limit=300)
         print('Variants generation completed')
+        print('Generating networks')
+        self.networks = self.get_networks()
+        print('Networks generation completed')
+        print('Filtering equivalent and repeated networks')
+        self.filtered_networks = list(aux_fun())
+        print('Filtration completed')
         print('Launch the validation of the networks')
         self.validation = Validation(variants=self.variants, nodes=[node.name for node in self.get_nodes()],
                                      inputs=self.inputs, attractors=self.attractors)
@@ -153,8 +170,19 @@ class Graph:
         A method to get all the inputs of the graph.
         """
         if 'inputs' not in dir(self):
-            self.inputs = list(filter(lambda x: x.get_input(), self.get_nodes()))
+            self.inputs = [node.name for node in list(filter(lambda x: x.get_input(), self.get_nodes()))]
         return self.inputs
+
+    def get_networks(self):
+        """
+        DESCRIPTION:
+        A method to get all the different object networks associated with the graph through the variants.
+        :return: [list] associated networks.
+        """
+        if 'networks' not in dir(self):
+            # Get total number of networks
+            self.networks = list(self.networks_generator())
+        return self.networks
 
     def set_adjustment(self):
         """
@@ -179,13 +207,24 @@ class Graph:
         A method to generate all the variants associated with the graph.
         :param limit: [int] number of variants to which the generation can be limited.
         """
-        inputs_names = [node.name for node in self.get_inputs()]
+        inputs_names = self.get_inputs()
         roles_combinations = self.get_roles_combinations()
         roles_combinations = roles_combinations[0:limit] if limit is not None else roles_combinations
-        with progressbar.ProgressBar(max_value=len(roles_combinations)) as bar:
+        with alive_bar(len(roles_combinations)) as bar:
             for i in range(0, len(roles_combinations)):
                 yield Variant(roles=roles_combinations[i], initial_data=self.initial_data, inputs=inputs_names)
-                bar.update(i)
+                bar()
+
+    def networks_generator(self):
+        """
+        DESCRIPTION:
+        A method to generate all the networks associated with the variants in the graph.
+        """
+        with alive_bar() as bar:
+            for variant in self.get_variants():
+                for network in variant.get_networks():
+                    yield Network(structure=network, roles=variant.roles, data=variant.data, inputs=variant.inputs)
+                    bar()
 
 
 class Node:
@@ -333,3 +372,50 @@ class Variant:
         else:
             networks = self.networks
         return networks
+
+
+class Network:
+    """
+    DESCRIPTION:
+    An object to represent every network to be validated.
+    """
+
+    # Method
+    def __init__(self, structure, roles, data, inputs):
+        """
+        DESCRIPTION:
+        Builder method of the object.
+        :param structure: [list] structure of the network to be taken by the algorithm.
+        :param roles: [list] roles of every node in the structure.
+        :param data: [pandas DataFrame] representation of the graph.
+        :param inputs: [list] names of the nodes which are inputs.
+        """
+        self.structure = structure
+        self.roles = roles
+        self.data = data
+        self.inputs = inputs
+        self.map = self.get_map()
+        self.code = self.get_code()
+
+    def get_map(self):
+        """
+        DESCRIPTION:
+        A method to build the object map associated with every network.
+        :return: [KMap] table of truth of the network.
+        """
+        if 'map' not in dir(self):
+            self.map = KMap(self.structure, self.data, self.roles, self.inputs)
+        return self.map
+
+    def get_code(self):
+        """
+        DESCRIPTION:
+        A method to obtain or generate the code which characterizes the kind to which the network belongs.
+        """
+        def code_maker(item):
+            return f'${"".join(item[1])}:{item[0]}$'
+
+        if 'code' not in dir(self):
+            self.code = ''.join(map(code_maker, self.map.get_support(hex_flag=True).items()))
+        return self.code
+

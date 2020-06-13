@@ -527,11 +527,13 @@ class KMap:
         :param network: [list] the structure in which the graph nodes are distributed.
         :param graph: [pandas DataFrame] description of the whole set of pathways from which the network comes.
         :param roles_set: [list] the set of roles (canalizing and canalized value) for every node in the expressions.
+        :param inputs: [list] names of the nodes of the network which are inputs.
         """
         self.network = network
         self.graph = graph
-        self.inputs = [node.name for node in inputs]
+        self.inputs = inputs
         self.roles_set = roles_set
+        self.combinations, self.variables = self.get_space()
         self.maps = self.set_maps()
 
     def __str__(self):
@@ -549,7 +551,7 @@ class KMap:
         DESCRIPTION:
         An eval method to assess every expression related to the nodes. Therefore, these
         expressions show a specific structure. It is not a general-purpose eval method.
-        :param variables_set: [list] dicts with the combinations of variables to be assessed.
+        :param variables_set: [generator] dicts with the combinations of variables to be assessed.
         :param expressions: [list] boolean functions to be assessed with the structure given by Murrugarra2013 in
         Boolnet notation.
         :return: [pandas DataFrame] all the functions associated to the nodes with the result for every variables
@@ -631,6 +633,53 @@ class KMap:
                 else:
                     (yield node + ', 1') if sop.canonical else (yield node + ', 0')
 
+    def get_space(self):
+        """
+        DESCRIPTION:
+        A method to efficiently generate all the space in which the expressions are to be assessed.
+        :param data: [pandas DataFrame] representation of the graph.
+        :return: [list] tuples to be converted into a dictionary.
+        """
+
+        # Auxiliary functions
+        def str_gen(n):
+            for i in range(0, n):
+                yield '0'
+
+        def aux_gen():
+            for comb in self.combinations:
+                yield {self.graph.index[i]: int(comb[i]) for i in range(0, len(comb))}
+
+        if 'combinations' not in dir(self):
+            self.combinations = [bin(i).split('b')[1] if len(bin(i).split('b')[1]) == len(self.graph.index)
+                                 else ''.join(str_gen(len(self.graph.index) - len(bin(i).split('b')[1])))
+                                      + bin(i).split('b')[1] for i in range(0, 2 ** len(self.graph.index))]
+        if 'variables' not in dir(self):
+            self.variables = tuple(aux_gen())
+
+        return self.combinations, self.variables
+
+    def get_support(self, node=None, hex_flag=False):
+        """
+        DESCRIPTION:
+        A method to obtain the support of a given node. If not, it returns the support of all the nodes.
+        :param node: [string] name of the node whose support must be obtained.
+        :param hex: [boolean] flag to determine whether the support is to be given in hexadecimal or not.
+        :return: [dict] all the terms of support selected by node.
+        """
+        # Auxiliary functions
+        def converter(number):
+            if hex_flag:
+                return (lambda x: hex(int(x, 2)))(number)
+            else:
+                return (lambda x: x)(number)
+
+        if node is not None:
+            return {node: list(map(converter, self.maps.loc[node, :][lambda x: x].index.values.tolist()))}
+        else:
+            return {node: list(map(converter, self.maps.loc[node, :][lambda x: x].index.values.tolist()))
+                    for node in self.maps.index}
+
     def set_maps(self):
         """
         DESCRIPTION:
@@ -638,10 +687,6 @@ class KMap:
         :return: [pandas DataFrame] the maps for all the nodes.
         """
         # Auxiliary functions
-        def str_gen(n):
-            for i in range(0, n):
-                yield '0'
-
         def get_symbol(source, letter):
             """
             DESCRIPTION:
@@ -653,11 +698,6 @@ class KMap:
                 symbol = '!' if canalizing_value == 1 else ''
             return symbol
 
-        # Parameters
-        combinations = [bin(i).split('b')[1] if len(bin(i).split('b')[1]) == len(self.graph.index) else
-                        ''.join(str_gen(len(self.graph.index) - len(bin(i).split('b')[1]))) + bin(i).split('b')[1]
-                        for i in range(0, 2 ** len(self.graph.index))]
-        variables = [{self.graph.index[i]: int(comb[i]) for i in range(0, len(comb))} for comb in combinations]
         # Build the expression
         network = []
         for i in range(0, len(self.network)):
@@ -688,13 +728,15 @@ class KMap:
                     load = level
             network.append(load)
         # Build the map
-        values = self.eval_expression(variables, network)
+        values = self.eval_expression(self.get_space()[1], network)
         values = [values[int(i*len(values)/len(self.graph.index)):int((i+1)*len(values)/len(self.graph.index))] for i in range(0, len(self.graph.index))]
-        index = self.graph.index
-        columns = combinations
         # Change and send the map
-        kmaps = pd.DataFrame(data=values, index=index, columns=columns)
+        kmaps = pd.DataFrame(data=values, index=self.graph.index, columns=self.get_space()[0])
         self.maps = kmaps
+        if len(self.maps.index) != len(self.graph.index):
+            time.sleep(30)
+            print('HOLAAAA')
+            print()
         return kmaps
 
 
@@ -708,4 +750,9 @@ def simplify(symbols, minterms):
     """
     variables = ' '.join(symbols)
     return SOPform(variables=sympy.symbols(variables), minterms=minterms, dontcares=[])
+
+
+
+
+
 

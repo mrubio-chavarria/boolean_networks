@@ -33,6 +33,7 @@ class Validation:
         self.inputs = inputs
         self.attractors = attractors
         self.space = self.get_space()
+
         self.results = self.execute_validation()
 
     def __str__(self):

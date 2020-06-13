@@ -12,3 +12,4 @@ pytictoc==1.5.0
 pytz==2019.3
 six==1.14.0
 sympy==1.5
+alive_progress==1.5.0
