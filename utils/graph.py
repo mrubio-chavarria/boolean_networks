@@ -34,7 +34,7 @@ class Graph:
         self.roles_combinations = self.get_roles_combinations()
         # Set the variants of the network
         print('Start variants generation')
-        self.variants = self.get_variants(limit=30)
+        self.variants = self.get_variants(limit=300)
         print('Variants generation completed')
         print('Launch the validation of the networks')
         self.validation = Validation(variants=self.variants, nodes=[node.name for node in self.get_nodes()],

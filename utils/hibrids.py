@@ -7,7 +7,7 @@ class Result:
     A class built to store the results of the simulation.
     """
 
-    def __init__(self, network, pathways, maps_set, conflicts, simulation, iterations, expressions, attractors,
+    def __init__(self, network, pathways, maps_set, conflicts, simulation, iterations, expressions, attractors, variant,
                  accepted=False):
         """
         DESCRIPTION:
@@ -20,6 +20,7 @@ class Result:
         :param iterations: [int] number of the iterations performed.
         :param expressions: [list] final expressions of the net in boolnet format.
         :param attractors: [dict] all the attractors of the network, steady and cyclic.
+        :param variant: [Variant] the modification of the graph with the roles that produced this result.
         :param accepted: [boolean] sign to indicate whether the pathways has been included or not.
         """
         self.network = network
@@ -34,6 +35,7 @@ class Result:
         self.expressions = expressions
         self.attractors = attractors
         self.accepted = accepted
+        self.variant = variant
 
     def get_code(self):
         """

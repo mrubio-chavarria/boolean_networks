@@ -2,6 +2,8 @@ import re
 import sys
 import itertools
 import pandas as pd
+import time
+from utils.exceptions import InputAlterationException
 from utils.utils import Term
 from utils.Kmap import Minterms
 import random
@@ -483,7 +485,7 @@ class Conflict:
         base_map.maps.at[high_pathway.consequent, minterms] = high_pathway.activator
         positions = base_map.maps.loc[high_pathway.consequent, :]
         minterms = [int(position[0], 2) for position in positions[positions != high_pathway.activator].index]
-        simplified_minterms = str(simplificate(list(self.graph.index), minterms)).replace(' ', '').replace('~', '!').\
+        simplified_minterms = str(simplify(list(self.graph.index), minterms)).replace(' ', '').replace('~', '!').\
             split('|')
         # Select the most advantageous term
         # TO BE IMPLEMENTED. By this time it is only selected a random term.
@@ -492,7 +494,7 @@ class Conflict:
                           if not any([True if letter in inputs else False for letter in r.findall(minterm)])]
         if not valid_minterms:
             # If there are no valid terms, the algorithm has terminated
-            raise IndexError
+            raise InputAlterationException
         minterm = random.choice(valid_minterms)
         # Generate new pathways
         for var in minterm.split('&'):
@@ -593,7 +595,6 @@ class KMap:
                     expr = [expr[i] for i in range(0, len(expr)) if expr[i] != '!']
                     final_values.append(all(expr))
                 else:
-                    # Revision pending to be REVISED
                     factors = expression.split('&')
                     final_values.append(all([variables[factor[0]] == 1 if factor[0] != '!' else
                                              not variables[factor[1]] == 1 for factor in factors]))
@@ -618,20 +619,17 @@ class KMap:
         # Obtain the letters
         nodes = self.maps.index
         # Simplification with KMaps
-        expressions = []
         for node in nodes:
             minterms = [it[0] for it in filter(lambda x: x[1], enumerate(self.maps.loc[node, :].tolist()))]
-            sop = simplificate(list(self.graph.index), minterms)
-            if not sop.is_Boolean:
-                sop = str(sop).replace(' ', '').replace('~', '!').split('|')
-                expression = node + ', ' + '|'.join(sop)
+            sop = simplify(list(self.graph.index), minterms)
+            if sop.is_Symbol:
+                yield node + ', ' + str(sop)
             else:
-                if sop.canonical:
-                    expression = node + ', ' + '|'.join(list(self.graph.index))
+                if sop.is_Function:
+                    time.sleep(10)
+                    yield node + ', ' + '|'.join(str(sop).replace(' ', '').replace('~', '!').split('|'))
                 else:
-                    expression = node + ', ' + '&'.join(list(self.graph.index)) + '&!' + '&!'.join(list(self.graph.index))
-            expressions.append(expression)
-        return expressions
+                    (yield node + ', 1') if sop.canonical else (yield node + ', 0')
 
     def set_maps(self):
         """
@@ -700,7 +698,7 @@ class KMap:
         return kmaps
 
 
-def simplificate(symbols, minterms):
+def simplify(symbols, minterms):
     """
     DESCRIPTION:
     A function that, given a set of minterm in binary form, simplifies the whole set into the minimal sum of products.

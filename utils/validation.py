@@ -1,9 +1,10 @@
-
+import time
 import uuid
 import pytictoc
 import progressbar
 from functools import reduce
 from utils.conflicts_theory import Pathway, KMap, ConflictsManager
+from utils.exceptions import InputAlterationException, NotValidNetworkException
 from utils.hibrids import Result
 from utils.ncbf import blosum_generator
 from PyBoolNet import StateTransitionGraphs, Attractors, FileExchange
@@ -158,15 +159,8 @@ class Validation:
                                     n_pathways = len(pathways)
                                     continue
                             i += 1
-                    except ValueError:
-                        # If the map of the INPUT is altered the simulation is not valid. Likewise, if we enter in a
-                        # cyclic resolution of the conflicts, the simulation is not valid.
-                        condition_result = False
-                    except IndexError:
-                        # The same situation of the INPUT, at the time of selecting destiny nodes.
-                        condition_result = False
-                    except RecursionError:
-                        # Another situation in which the error algorithm takes too many iterations.
+                    except InputAlterationException:
+                        # If the map of the INPUT is altered the simulation is not valid.
                         condition_result = False
                     # Update progress
                     bar.update(counter)
@@ -176,7 +170,7 @@ class Validation:
                         # Apply all the pathways over the map
                         base_map.modificate_maps(pathways)
                         # Get the expression from the maps
-                        expressions = base_map.get_expressions()
+                        expressions = list(base_map.get_expressions())
                         # Validation with the attractors
                         primes = FileExchange.bnet2primes('\n'.join(expressions))
                         stg = StateTransitionGraphs.primes2stg(primes, "synchronous")
@@ -188,7 +182,8 @@ class Validation:
                                         simulation=m,
                                         iterations=iter_count,
                                         expressions=expressions,
-                                        attractors={'steady': steady, 'cyclic': cyclic})
+                                        attractors={'steady': steady, 'cyclic': cyclic},
+                                        variant=variant)
                         # Set if the result has been successful and return it
                         result.accepted = all([True if att in steady else False for att in self.attractors])
                         yield result
@@ -213,6 +208,7 @@ class Validation:
             total_networks = len(self.variants) * variants_networks * simulations
             with progressbar.ProgressBar(max_value=total_networks) as bar:
                 results = list(self.third_validation(bar, simulations=simulations))
+            filtered_results = list(filter(lambda x: x.accepted, results))
         return results
 
 
