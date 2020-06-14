@@ -3,6 +3,9 @@ import uuid
 import pytictoc
 import progressbar
 from functools import reduce
+
+from alive_progress import alive_bar
+
 from utils.conflicts_theory import Pathway, KMap, ConflictsManager
 from utils.exceptions import InputAlterationException, NotValidNetworkException
 from utils.hibrids import Result
@@ -16,24 +19,23 @@ class Validation:
     An object to standardize the different kinds of validation gathered in in ncbf.py.
     """
 
-    def __init__(self, variants, nodes, inputs, kind='III', attractors=None):
+    def __init__(self, networks, nodes, inputs, kind='III', attractors=None):
         """
         DESCRIPTION:
         Builder of the object Validation.
         :param kind: [string] code indicating the kind of validation to be performed.
-        :param variants: [list] variants to be validated.
+        :param networks: [list] networks to be validated.
         :param nodes: [list] names of the nodes of the network.
         :param inputs: [list] nodes that are inputs.
         :param attractors: [list] strings containing the attractors for the validation.
         """
         self.id = f'vd{uuid.uuid1()}'
         self.type = kind
-        self.variants = variants
+        self.networks = networks
         self.nodes = nodes
         self.inputs = inputs
         self.attractors = attractors
         self.space = self.get_space()
-
         self.results = self.execute_validation()
 
     def __str__(self):
@@ -79,42 +81,31 @@ class Validation:
                     else:
                         yield Pathway(antecedent=el, consequent=self.nodes[i], activator=False, space=self.get_space())
 
-    def third_validation(self, bar, simulations=20, max_iterations=2000, max_pathways=6400):
+    def third_validation(self, simulations=20, max_iterations=2000, max_pathways=6400):
         """
         DESCRIPTION:
         The mechanism of validation to obtain the corrected maps with all the generated pathways according to the given,
         initial, map.
-        :param bar: [progressbar] the bar to keep the display of the progress updated.
         :param simulations: [int] parameter to set the number of simulations to perform.
         :param max_iterations: [int] parameter to set the maximum number of iterations all around the network.
         :param max_pathways: [int] parameter to set the maximum number of pathways.
         """
-        # Validate each variant
-        counter = 0
-        for variant in self.variants:
-            # Obtain the initial set of pathways from the graph
-            initial_pathways = list(self.get_initial_pathways(variant=variant))
-            # Launch the simulations
+        # Launch the simulations
+        with alive_bar(simulations*len(self.networks)) as bar:
             for m in range(0, simulations):
-                # Generate the matrix with the priorities for the simulation
-                blosum = blosum_generator(variant.data)
-                net_counter = -1
-                for network in variant.get_networks():
-                    net_counter += 1
+                for network in self.networks:
                     condition_result = True  # set the condition to append the result of the simulation
-                    pathways = initial_pathways[:]
+                    pathways = network.pathways[:]
                     n_pathways = len(pathways)  # number of pathways
-                    # Generate the basis map
-                    base_map = KMap(network=network, graph=variant.data, roles_set=variant.roles, inputs=self.inputs)
                     # Control parameters
                     i = 0
                     iter_count = 0
                     conflicts = []
                     # Calculate
                     try:
-                        while i < len(variant.data.index):
+                        while i < len(network.variant.data.index):
                             # Get the pathways of the node
-                            node = variant.data.index[i]
+                            node = network.variant.data.index[i]
                             node_pathways = {'activators': [], 'inhibitors': []}
                             [node_pathways['activators'].append(pathway) if pathway.activator
                              else node_pathways['inhibitors'].append(pathway) for pathway in pathways
@@ -123,11 +114,11 @@ class Validation:
                             pathways = list(filter(lambda x: x.consequent != node, pathways))
                             manager = ConflictsManager(activators=node_pathways['activators'],
                                                        inhibitors=node_pathways['inhibitors'],
-                                                       priority_matrix=blosum,
-                                                       network=network,
+                                                       priority_matrix=network.variant.priority_matrix,
+                                                       network=network.structure,
                                                        conflicts=conflicts,
-                                                       base_map=base_map,
-                                                       graph=variant.data,
+                                                       base_map=network.map,
+                                                       graph=network.variant.data,
                                                        node=node)
                             pathways.extend(manager.get_solution())
                             pathways.sort(key=lambda x: x.consequent)
@@ -150,7 +141,7 @@ class Validation:
                             occurrences = [list(filter(lambda x: x[1] == code, occurrences))[0] for code in codes]
                             pathways = [pathways[p[0]] for p in occurrences]
                             # Validation
-                            if i == len(variant.data.index) - 1:
+                            if i == len(network.variant.data.index) - 1:
                                 iter_count += 1
                                 if iter_count >= max_iterations:
                                     condition_result = False
@@ -164,27 +155,26 @@ class Validation:
                         # If the map of the INPUT is altered the simulation is not valid.
                         condition_result = False
                     # Update progress
-                    bar.update(counter)
-                    counter += 1
+                    bar()
                     # Check the condition and add the new result
                     if condition_result:
                         # Apply all the pathways over the map
-                        base_map.modificate_maps(pathways)
+                        network.map.modificate_maps(pathways)
                         # Get the expression from the maps
-                        expressions = list(base_map.get_expressions())
+                        expressions = list(network.map.get_expressions())
                         # Validation with the attractors
                         primes = FileExchange.bnet2primes('\n'.join(expressions))
                         stg = StateTransitionGraphs.primes2stg(primes, "synchronous")
                         steady, cyclic = Attractors.compute_attractors_tarjan(stg)
-                        result = Result(network=network,
+                        result = Result(network=network.structure,
                                         pathways=pathways,
-                                        maps_set=base_map,
+                                        maps_set=network.map,
                                         conflicts=conflicts,
                                         simulation=m,
                                         iterations=iter_count,
                                         expressions=expressions,
                                         attractors={'steady': steady, 'cyclic': cyclic},
-                                        variant=variant)
+                                        variant=network.variant)
                         # Set if the result has been successful and return it
                         result.accepted = all([True if att in steady else False for att in self.attractors])
                         yield result
@@ -205,10 +195,7 @@ class Validation:
         if self.type == 'III':
             # Third method of validation
             simulations = 20
-            variants_networks = sum([len(variant.get_networks()) for variant in self.variants])
-            total_networks = len(self.variants) * variants_networks * simulations
-            with progressbar.ProgressBar(max_value=total_networks) as bar:
-                results = list(self.third_validation(bar, simulations=simulations))
+            results = list(self.third_validation(simulations=simulations))
             filtered_results = list(filter(lambda x: x.accepted, results))
         return results
 

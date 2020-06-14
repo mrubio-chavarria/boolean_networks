@@ -216,12 +216,9 @@ class Pathway:
     An object to represent the pathway with which we are working.
     """
 
-    # Attributes
-    map = None
-    region_of_interest = None
-
     # Methods
-    def __init__(self, antecedent, consequent, activator, space=None, expression=None):
+    def __init__(self, antecedent, consequent, activator, space=None, expression=None, canalizing_value=None,
+                 canalized_value=None):
         """
         DESCRIPTION:
         Builder of the object.
@@ -230,10 +227,14 @@ class Pathway:
         :param activator: [boolean] Variable to store if the relation among sides if activatory or inhibitory.
         :param space: [list] list of dicts with all variables combinations which form space in which the function is
         defined.
+        :param canalizing_value: [int] value to be manifested by the antecedent.
+        :param canalized_value: [int] value to be provoked in the consequent.
         """
         self.id = str(uuid4())
         self.code = ''
         self.antecedent = ''.join(sorted(antecedent))
+        self.canalizing_value = canalizing_value
+        self.canalized_value = canalized_value
         self.consequent = consequent
         self.activator = activator
         self.expression = self.set_antecedent_expression_from_graph(antecedent) if expression is None else expression
@@ -297,6 +298,36 @@ class Pathway:
         expression = '&'.join(list(original))
         return expression
 
+    def set_map(self, variables_set):
+        """
+        DESCRIPTION:
+        A method that, given a set of variables calculates its Karnaugh map in an abstract manner.
+        :param variables_set: [list] list of dicts with the variables combinations to be tested.
+        :return: [dict] combinations and their result to the pathway.
+        :return: [list] strings drawing the to which the pathway has been designed.
+        :return: [string] code to indicate the type to which the pathway belongs.
+        """
+        self.map = {''.join([str(var) for var in vs_set.values()]): self.eval_expression(vs_set)
+                    for vs_set in variables_set}
+        self.region_of_interest = list(sorted([key for key in self.map.keys() if self.map[key]]))
+        self.code = f'${"".join(self.region_of_interest)}:{self.consequent}$'
+
+    def set_role(self, role):
+        """
+        DESCRIPTION:
+        A method to impose upon the expression the canalizing value. The canalizing value has been taken into account
+        before.
+        """
+        factors = self.expression.split('&')
+        for i in range(0, len(factors)):
+            if role[1] in factors[i]:
+                if len(factors[i]) == 2 and role[2] == 0:
+                    factors[i] = factors[i][-1]
+                elif len(factors[i]) == 1 and role[2] == 1:
+                    factors[i] = '!' + factors[i]
+                    factors[i] = '!' + factors[i]
+        self.expression = '&'.join(factors)
+
     def eval_expression(self, variables):
         """
         DESCRIPTION:
@@ -324,20 +355,6 @@ class Pathway:
         values = [local_eval(minterm, variables) for minterm in minterms]
         value = all(values)
         return value
-
-    def set_map(self, variables_set):
-        """
-        DESCRIPTION:
-        A method that, given a set of variables calculates its Karnaugh map in an abstract manner.
-        :param variables_set: [list] list of dicts with the variables combinations to be tested.
-        :return: [dict] combinations and their result to the pathway.
-        :return: [list] strings drawing the to which the pathway has been designed.
-        :return: [string] code to indicate the type to which the pathway belongs.
-        """
-        self.map = {''.join([str(var) for var in vs_set.values()]): self.eval_expression(vs_set)
-                    for vs_set in variables_set}
-        self.region_of_interest = list(sorted([key for key in self.map.keys() if self.map[key]]))
-        self.code = f'${"".join(self.region_of_interest)}:{self.consequent}$'
 
 
 class Conflict:
@@ -520,7 +537,7 @@ class KMap:
     """
 
     # Methods
-    def __init__(self, network, graph, roles_set=None, inputs=None):
+    def __init__(self, network, graph, roles_set=None, inputs=None, space=None):
         """
         DESCRIPTION:
         Builder of the object.
@@ -528,12 +545,13 @@ class KMap:
         :param graph: [pandas DataFrame] description of the whole set of pathways from which the network comes.
         :param roles_set: [list] the set of roles (canalizing and canalized value) for every node in the expressions.
         :param inputs: [list] names of the nodes of the network which are inputs.
+        :param space: [list] dictionaries representing the space in which the expressions are to be assessed.
         """
         self.network = network
         self.graph = graph
         self.inputs = inputs
         self.roles_set = roles_set
-        self.combinations, self.variables = self.get_space()
+        self.space = self.get_space() if space is None else space
         self.maps = self.set_maps()
 
     def __str__(self):
@@ -636,28 +654,21 @@ class KMap:
     def get_space(self):
         """
         DESCRIPTION:
-        A method to efficiently generate all the space in which the expressions are to be assessed.
-        :param data: [pandas DataFrame] representation of the graph.
-        :return: [list] tuples to be converted into a dictionary.
+        A method to establish the boolean space in which the variants are going to be evaluated.
+        :return: [list] dictionaries representing the space.
         """
-
         # Auxiliary functions
         def str_gen(n):
             for i in range(0, n):
                 yield '0'
 
-        def aux_gen():
-            for comb in self.combinations:
-                yield {self.graph.index[i]: int(comb[i]) for i in range(0, len(comb))}
+        if 'space' not in dir(self):
+            combinations = [bin(i).split('b')[1] if len(bin(i).split('b')[1]) == len(self.graph.index) else
+                            ''.join(str_gen(len(self.graph.index) - len(bin(i).split('b')[1]))) + bin(i).split('b')[1]
+                            for i in range(0, 2 ** len(self.graph.index))]
+            self.space = [{self.graph.index[i]: int(c[i]) for i in range(0, len(c))} for c in combinations]
 
-        if 'combinations' not in dir(self):
-            self.combinations = [bin(i).split('b')[1] if len(bin(i).split('b')[1]) == len(self.graph.index)
-                                 else ''.join(str_gen(len(self.graph.index) - len(bin(i).split('b')[1])))
-                                      + bin(i).split('b')[1] for i in range(0, 2 ** len(self.graph.index))]
-        if 'variables' not in dir(self):
-            self.variables = tuple(aux_gen())
-
-        return self.combinations, self.variables
+        return self.space
 
     def get_support(self, node=None, hex_flag=False):
         """
@@ -728,10 +739,11 @@ class KMap:
                     load = level
             network.append(load)
         # Build the map
-        values = self.eval_expression(self.get_space()[1], network)
+        values = self.eval_expression(self.get_space(), network)
         values = [values[int(i*len(values)/len(self.graph.index)):int((i+1)*len(values)/len(self.graph.index))] for i in range(0, len(self.graph.index))]
         # Change and send the map
-        kmaps = pd.DataFrame(data=values, index=self.graph.index, columns=self.get_space()[0])
+        kmaps = pd.DataFrame(data=values, index=self.graph.index, columns=list(map(
+            lambda x: bin(x)[2::].zfill(len(self.graph.index)), range(0, len(self.get_space())))))
         self.maps = kmaps
         if len(self.maps.index) != len(self.graph.index):
             time.sleep(30)

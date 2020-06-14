@@ -1,9 +1,10 @@
-
+from functools import reduce
+from utils.ncbf import blosum_generator
 import pandas as pd
 import uuid
 import itertools
 from alive_progress import alive_bar
-from utils.conflicts_theory import KMap
+from utils.conflicts_theory import KMap, Pathway
 from utils.ncbf import ncbfCalc, networksCalc
 from utils.validation import Validation
 
@@ -37,6 +38,7 @@ class Graph:
         self.initial_data = initial_data
         self.networks_codes = []
         self.nodes = self.get_nodes()
+        self.space = self.get_space()
         self.attractors = attractors
         # Establish the relationships between nodes
         self.set_adjustment()
@@ -45,16 +47,13 @@ class Graph:
         self.roles_combinations = self.get_roles_combinations()
         # Set the variants of the network
         print('Generating variants')
-        self.variants = self.get_variants(limit=300)
+        self.variants = self.get_variants(limit=30)
         print('Variants generation completed')
         print('Generating networks')
         self.networks = self.get_networks()
         print('Networks generation completed')
-        print('Filtering equivalent and repeated networks')
-        self.filtered_networks = list(aux_fun())
-        print('Filtration completed')
         print('Launch the validation of the networks')
-        self.validation = Validation(variants=self.variants, nodes=[node.name for node in self.get_nodes()],
+        self.validation = Validation(networks=self.networks, nodes=[node.name for node in self.get_nodes()],
                                      inputs=self.inputs, attractors=self.attractors)
         print()
 
@@ -184,6 +183,26 @@ class Graph:
             self.networks = list(self.networks_generator())
         return self.networks
 
+    def get_space(self):
+        """
+        DESCRIPTION:
+        A method to establish the boolean space in which the variants are going to be evaluated.
+        :return: [list] dictionaries representing the space.
+        """
+        # Auxiliary functions
+        def str_gen(n):
+            for i in range(0, n):
+                yield '0'
+
+        nodes = [node.name for node in self.get_nodes()]
+        if 'space' not in dir(self):
+            combinations = [bin(i).split('b')[1] if len(bin(i).split('b')[1]) == len(nodes) else
+                            ''.join(str_gen(len(nodes) - len(bin(i).split('b')[1]))) + bin(i).split('b')[1]
+                            for i in range(0, 2 ** len(nodes))]
+            self.space = [{nodes[i]: int(c[i]) for i in range(0, len(c))} for c in combinations]
+
+        return self.space
+
     def set_adjustment(self):
         """
         DESCRIPTION:
@@ -212,7 +231,8 @@ class Graph:
         roles_combinations = roles_combinations[0:limit] if limit is not None else roles_combinations
         with alive_bar(len(roles_combinations)) as bar:
             for i in range(0, len(roles_combinations)):
-                yield Variant(roles=roles_combinations[i], initial_data=self.initial_data, inputs=inputs_names)
+                yield Variant(roles=roles_combinations[i], initial_data=self.initial_data, inputs=inputs_names,
+                              space=self.get_space())
                 bar()
 
     def networks_generator(self):
@@ -223,7 +243,7 @@ class Graph:
         with alive_bar() as bar:
             for variant in self.get_variants():
                 for network in variant.get_networks():
-                    yield Network(structure=network, roles=variant.roles, data=variant.data, inputs=variant.inputs)
+                    yield Network(structure=network, variant=variant)
                     bar()
 
 
@@ -300,21 +320,26 @@ class Variant:
     # Attributes
 
     # Methods
-    def __init__(self, roles, initial_data, inputs):
+    def __init__(self, roles, initial_data, inputs, space):
         """
         DESCRIPTION:
         Builder of the class.
         :param roles: [list] representation of the role given to every node.
         :param initial_data: [pandas DataFrame] initial representation of the graph.
         :param inputs: [list] names of the nodes that act as inputs.
+        :param space: [list] dictionaries representing the space in which the expressions are to be assessed
         """
         self.id = f'vr{uuid.uuid1()}'
         self.roles = roles
+        self.space = space
         self.initial_data = initial_data
         self.inputs = inputs
         self.data = self.get_data()
+        self.pathways = list(self.get_initial_pathways())
         self.paths = self.get_paths()
         self.networks = self.get_networks()
+        self.priority_matrix = self.get_priority_matrix()
+
 
     def __str__(self):
         """
@@ -373,6 +398,29 @@ class Variant:
             networks = self.networks
         return networks
 
+    def get_initial_pathways(self):
+        """
+        DESCRIPTION:
+        A method to obtain the initial set of pathways given a variant. Beware! It is assumed that if a node is not in
+        the activators, it is to be in the inhibitors and vice versa.
+        """
+        for i in range(0, len(self.data.index)):
+            for el in list(reduce(lambda x, y: x + y, self.data.values.tolist()[i])):
+                if el != '':
+                    if el in self.data['activators'][self.data.index[i]]:
+                        yield Pathway(antecedent=el, consequent=self.data.index[i], activator=True, space=self.space)
+                    else:
+                        yield Pathway(antecedent=el, consequent=self.data.index[i], activator=False, space=self.space)
+
+    def get_priority_matrix(self):
+        """
+        DESCRIPTION:
+        A method to obtain the priority matrix associated with the variant. It will be employed during the validation.
+        """
+        if 'priority_matrix' not in dir(self):
+            self.priority_matrix = blosum_generator(self.data)
+        return self.priority_matrix
+
 
 class Network:
     """
@@ -381,21 +429,19 @@ class Network:
     """
 
     # Method
-    def __init__(self, structure, roles, data, inputs):
+    def __init__(self, structure, variant):
         """
         DESCRIPTION:
         Builder method of the object.
         :param structure: [list] structure of the network to be taken by the algorithm.
-        :param roles: [list] roles of every node in the structure.
-        :param data: [pandas DataFrame] representation of the graph.
-        :param inputs: [list] names of the nodes which are inputs.
+        :param variant: [Variant] object with the variant of the graph
         """
         self.structure = structure
-        self.roles = roles
-        self.data = data
-        self.inputs = inputs
+        self.variant = variant
         self.map = self.get_map()
         self.code = self.get_code()
+        self.pathways = self.get_pathways()
+        self.set_canalizing_values()
 
     def get_map(self):
         """
@@ -404,7 +450,8 @@ class Network:
         :return: [KMap] table of truth of the network.
         """
         if 'map' not in dir(self):
-            self.map = KMap(self.structure, self.data, self.roles, self.inputs)
+            self.map = KMap(network=self.structure, graph=self.variant.data, roles_set=self.variant.roles,
+                            inputs=self.variant.inputs, space=self.variant.space)
         return self.map
 
     def get_code(self):
@@ -419,3 +466,31 @@ class Network:
             self.code = ''.join(map(code_maker, self.map.get_support(hex_flag=True).items()))
         return self.code
 
+    def get_pathways(self):
+        """
+        DESCRIPTION:
+        A method to generate the network pathways imposing the given role over the variant pathways.
+        """
+        if 'pathways' not in dir(self):
+            # Initial pathways
+            self.pathways = self.variant.pathways
+        return self.pathways
+
+    def set_canalizing_values(self):
+        """
+        DESCRIPTION:
+        A method to impose over the expressions of the pathways the canalizing values.
+        """
+        groups = filter(lambda x: x[1][0] == x[0].consequent and x[1][1] == x[0].antecedent,
+                        itertools.product(self.get_pathways(), self.variant.roles, repeat=1))
+        self.pathways = list(map(impose_roles, groups))
+
+
+def impose_roles(group):
+    """
+    DESCRIPTION:
+    A function to efficiently modify the expressions of the set of pathways.
+    :param group: [tuple] the pathway and its associated role.
+    """
+    group[0].set_role(group[1])
+    return group[0]
