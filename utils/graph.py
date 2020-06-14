@@ -14,29 +14,20 @@ class Graph:
     DESCRIPTION:
     An object to represent an instance of the represented graph. With all its possible manifestations.
     """
-    # Attributes
 
     # Methods
-    def __init__(self, initial_data, attractors=None):
+    def __init__(self, initial_data, attractors=None, filter_kernel=None):
         """
         DESCRIPTION:
         Builder of the object graph.
         :param initial_data: [pandas DataFrame] data representing the initial data upon which the graph is built.
         :param attractors: [list] strings containing the attractors for the validation.
+        :param filter_kernel: [dictionary] all the data to perform the filtration.
         """
-        # Auxiliary functions
-        def aux_fun():
-            with alive_bar(len(self.get_networks())) as bar:
-                for network in self.get_networks():
-                    if network.get_code() not in self.networks_codes:
-                        self.networks_codes.append(network.code)
-                        yield network
-                    bar()
-
         # Set the attributes
-        self.id = f'gr{uuid.uuid1()}'
         self.initial_data = initial_data
         self.networks_codes = []
+        self.filter = Filter(**filter_kernel) if filter_kernel is not None else filter_kernel
         self.nodes = self.get_nodes()
         self.space = self.get_space()
         self.attractors = attractors
@@ -47,7 +38,7 @@ class Graph:
         self.roles_combinations = self.get_roles_combinations()
         # Set the variants of the network
         print('Generating variants')
-        self.variants = self.get_variants(limit=30)
+        self.variants = self.get_variants(limit=300)
         print('Variants generation completed')
         print('Generating networks')
         self.networks = self.get_networks()
@@ -231,8 +222,8 @@ class Graph:
         roles_combinations = roles_combinations[0:limit] if limit is not None else roles_combinations
         with alive_bar(len(roles_combinations)) as bar:
             for i in range(0, len(roles_combinations)):
-                yield Variant(roles=roles_combinations[i], initial_data=self.initial_data, inputs=inputs_names,
-                              space=self.get_space())
+                if self.filter.clean(roles_set=roles_combinations[i]):
+                    yield Variant(roles=roles_combinations[i], initial_data=self.initial_data, inputs=inputs_names, space=self.get_space())
                 bar()
 
     def networks_generator(self):
@@ -243,7 +234,8 @@ class Graph:
         with alive_bar() as bar:
             for variant in self.get_variants():
                 for network in variant.get_networks():
-                    yield Network(structure=network, variant=variant)
+                    if self.filter.clean(structure=network):
+                        yield Network(structure=network, variant=variant)
                     bar()
 
 
@@ -252,7 +244,6 @@ class Node:
     DESCRIPTION:
     A class to represent elements of the network to be represented.
     """
-    # Attributes
 
     # Methods
     def __init__(self, name):
@@ -317,7 +308,6 @@ class Variant:
     DESCRIPTION:
     An object to set a modification of the graph depending the roles of activators and inhibitors.
     """
-    # Attributes
 
     # Methods
     def __init__(self, roles, initial_data, inputs, space):
@@ -339,7 +329,6 @@ class Variant:
         self.paths = self.get_paths()
         self.networks = self.get_networks()
         self.priority_matrix = self.get_priority_matrix()
-
 
     def __str__(self):
         """
@@ -428,7 +417,7 @@ class Network:
     An object to represent every network to be validated.
     """
 
-    # Method
+    # Methods
     def __init__(self, structure, variant):
         """
         DESCRIPTION:
@@ -484,6 +473,57 @@ class Network:
         groups = filter(lambda x: x[1][0] == x[0].consequent and x[1][1] == x[0].antecedent,
                         itertools.product(self.get_pathways(), self.variant.roles, repeat=1))
         self.pathways = list(map(impose_roles, groups))
+
+
+class Filter:
+    """
+    DESCRIPTION:
+    An object to control the filtration over the networks of the graph through the control in the generation of variants
+    and their associated networks.
+    """
+
+    # Methods
+    def __init__(self, roles_sets=None, structures=None):
+        """
+        DESCRIPTION:
+        Builder of the class.
+        :param roles_sets: [list] with the roles sets allowed.
+        :param structures: [list] with the structures allowed.
+        """
+        list(map(lambda y: y.sort(key=lambda x: x[0]), roles_sets))  # Order the roles sets
+        self.roles_sets_codes = list(map(self.roles_code_maker, roles_sets))
+        self.structures_codes = list(map(self.structures_code_maker, structures))
+
+    def roles_code_maker(self, roles_set):
+        """
+        DESCRIPTION:
+        A method to, given a roles set, generate its code.
+        :param roles_set: [list] roles of the different nodes.
+        """
+        return ''.join(list(map(lambda x: x[0] + x[1] + str(x[2]) + str(x[3]), roles_set)))
+
+    def structures_code_maker(self, structure):
+        """
+        DESCRIPTION:
+        A method to, given a roles set, generate its code.
+        :param structure: [list] structure of the network.
+        """
+        return '@'.join(['$'.join(node) if type(node) != str else node for node in structure])
+
+    def clean(self, **kwargs):
+        """
+        DESCRIPTION:
+        A method to perform the validation given by the filter.
+        """
+        condition = True
+        # Filtering by roles set
+        if 'roles_set' in kwargs.keys():
+            kwargs['roles_set'].sort(key=lambda x: x[0])
+            condition = condition and self.roles_code_maker(kwargs['roles_set']) in self.roles_sets_codes
+        # Filtering by structure
+        if 'structure' in kwargs.keys():
+            condition = condition and self.structures_code_maker(kwargs['structure']) in self.structures_codes
+        return condition
 
 
 def impose_roles(group):

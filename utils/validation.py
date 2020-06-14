@@ -125,7 +125,7 @@ class Validation:
                             # INPUT validation:
                             # There cannot be any pathway with an input in the consequent
                             if len(pathways) != len(list(filter(lambda x: x.consequent not in self.inputs, pathways))):
-                                raise ValueError
+                                raise InputAlterationException
                             # Filtering of equivalent pathways
                             occurrences = []
                             codes = []

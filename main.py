@@ -24,7 +24,23 @@ def main():
 
     # Generate the graph object
     attractors = ['00101', '11011', '11010']
-    graph = Graph(initial_data=initial_data, attractors=attractors)
+    filter_kernel = {
+                     'roles_sets': [[['I', 'I', 1, 1],
+                                    ['S', 'I', 1, 1],
+                                    ['S', 'S', 0, 1],
+                                    ['S', 'T', 0, 1],
+                                    ['T', 'S', 0, 1],
+                                    ['T', 'Z', 1, 0],
+                                    ['Z', 'D', 0, 1],
+                                    ['Z', 'S', 1, 1],
+                                    ['Z', 'Z', 1, 1],
+                                    ['D', 'D', 0, 0],
+                                    ['D', 'S', 1, 0],
+                                    ['D', 'Z', 1, 0]]],
+                     'structures': [['INPUT', ['IST'], ['Z', 'S'], ['DSZ'], ['DSZ']],
+                                    ['INPUT', ['IST'], ['S', 'Z'], ['DSZ'], ['DSZ']]]
+    }
+    graph = Graph(initial_data=initial_data, attractors=attractors, filter_kernel=filter_kernel)
 
     # Get another DataFrame with all the possible ncbf.
     tags = ['activators', 'inhibitors']

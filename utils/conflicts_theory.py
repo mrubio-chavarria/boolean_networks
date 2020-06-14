@@ -675,7 +675,7 @@ class KMap:
         DESCRIPTION:
         A method to obtain the support of a given node. If not, it returns the support of all the nodes.
         :param node: [string] name of the node whose support must be obtained.
-        :param hex: [boolean] flag to determine whether the support is to be given in hexadecimal or not.
+        :param hex_flag: [boolean] flag to determine whether the support is to be given in hexadecimal or not.
         :return: [dict] all the terms of support selected by node.
         """
         # Auxiliary functions
@@ -745,10 +745,6 @@ class KMap:
         kmaps = pd.DataFrame(data=values, index=self.graph.index, columns=list(map(
             lambda x: bin(x)[2::].zfill(len(self.graph.index)), range(0, len(self.get_space())))))
         self.maps = kmaps
-        if len(self.maps.index) != len(self.graph.index):
-            time.sleep(30)
-            print('HOLAAAA')
-            print()
         return kmaps
 
 
