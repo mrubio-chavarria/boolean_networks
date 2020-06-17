@@ -16,21 +16,26 @@ class Graph:
     """
 
     # Methods
-    def __init__(self, initial_data, attractors=None, filter_kernel=None):
+    def __init__(self, initial_data, attractors=None, filter_kernel=None, imposed_roles_sets=None):
         """
         DESCRIPTION:
         Builder of the object graph.
         :param initial_data: [pandas DataFrame] data representing the initial data upon which the graph is built.
         :param attractors: [list] strings containing the attractors for the validation.
         :param filter_kernel: [dictionary] all the data to perform the filtration.
+        :param imposed_roles_sets: [list] roles sets imposed externally, not directly inferred from the graph.
         """
         # Set the attributes
         self.initial_data = initial_data
         self.networks_codes = []
-        self.filter = Filter(**filter_kernel) if filter_kernel is not None else filter_kernel
+        self.filter = Filter(**filter_kernel) if filter_kernel is not None else Filter()
         self.nodes = self.get_nodes()
         self.space = self.get_space()
         self.attractors = attractors
+        # Impose the given roles sets
+        if imposed_roles_sets is not None:
+            [list(map(lambda x: x.append(str(x[-2]) + str(x[-1])), roles_set)) for roles_set in imposed_roles_sets]
+            self.imposed_roles_sets = imposed_roles_sets if imposed_roles_sets is not None else []
         # Establish the relationships between nodes
         self.set_adjustment()
         self.inputs = self.get_inputs()
@@ -38,7 +43,7 @@ class Graph:
         self.roles_combinations = self.get_roles_combinations()
         # Set the variants of the network
         print('Generating variants')
-        self.variants = self.get_variants(limit=300)
+        self.variants = self.get_variants()
         print('Variants generation completed')
         print('Generating networks')
         self.networks = self.get_networks()
@@ -54,7 +59,7 @@ class Graph:
         String method of the object
         :return: [string] a readable representation of the object.
         """
-        return f'Graph: ID {self.id} Nodes {self.nodes}'
+        return f'Graph nodes {self.nodes}'
 
     def get_nodes(self):
         """
@@ -136,11 +141,10 @@ class Graph:
             for i in range(1, len(tables)):
                 combinations = [list(map(lambda x: x + [str(x[2]) + str(x[3])], [it for sl in group for it in sl]))
                                 for group in itertools.product(combinations, tables[i], repeat=1)]
-            combinations = list(map(lambda x: [it[0:5] for it in x], combinations))
-        else:
-            combinations = self.roles_combinations
+            # At the end we impose the extra roles sets
+            self.roles_combinations = list(map(lambda x: [it[0:5] for it in x], combinations)) + self.imposed_roles_sets
 
-        return combinations
+        return self.roles_combinations
 
     def get_variants(self, limit=None):
         """
@@ -223,7 +227,8 @@ class Graph:
         with alive_bar(len(roles_combinations)) as bar:
             for i in range(0, len(roles_combinations)):
                 if self.filter.clean(roles_set=roles_combinations[i]):
-                    yield Variant(roles=roles_combinations[i], initial_data=self.initial_data, inputs=inputs_names, space=self.get_space())
+                    yield Variant(roles=roles_combinations[i], initial_data=self.initial_data, inputs=inputs_names,
+                                  space=self.get_space())
                 bar()
 
     def networks_generator(self):
@@ -319,7 +324,6 @@ class Variant:
         :param inputs: [list] names of the nodes that act as inputs.
         :param space: [list] dictionaries representing the space in which the expressions are to be assessed
         """
-        self.id = f'vr{uuid.uuid1()}'
         self.roles = roles
         self.space = space
         self.initial_data = initial_data
@@ -329,6 +333,10 @@ class Variant:
         self.paths = self.get_paths()
         self.networks = self.get_networks()
         self.priority_matrix = self.get_priority_matrix()
+        self.roles_code = self.get_roles_code()
+        file = open('codes.txt', 'a')
+        file.write('\n' + self.roles_code)
+        file.close()
 
     def __str__(self):
         """
@@ -336,7 +344,7 @@ class Variant:
         String method of the object
         :return: [string] a readable representation of the object.
         """
-        return f'Variant: ID {self.id}'
+        return f'Variant roles code: {self.get_roles_code()}'
 
     def get_data(self):
         """
@@ -410,6 +418,15 @@ class Variant:
             self.priority_matrix = blosum_generator(self.data)
         return self.priority_matrix
 
+    def get_roles_code(self):
+        """
+        DESCRIPTION:
+        A method to, given a roles set, generate its code.
+        """
+        if 'roles_code' not in dir(self):
+            self.roles.sort(key=lambda x: x[0] + x[1])
+            self.roles_code = ''.join(list(map(lambda x: x[0] + x[1] + str(x[2]) + str(x[3]), self.roles)))
+        return self.roles_code
 
 class Network:
     """
@@ -431,6 +448,14 @@ class Network:
         self.code = self.get_code()
         self.pathways = self.get_pathways()
         self.set_canalizing_values()
+
+    def __str__(self):
+        """
+        DESCRIPTION:
+        Method to obtain a readable representation of the object.
+        :return: [string] a readable representation of the object.
+        """
+        return '|'.join([' '.join(step) for step in self.structure if step != 'INPUT'])
 
     def get_map(self):
         """
@@ -490,9 +515,8 @@ class Filter:
         :param roles_sets: [list] with the roles sets allowed.
         :param structures: [list] with the structures allowed.
         """
-        list(map(lambda y: y.sort(key=lambda x: x[0]), roles_sets))  # Order the roles sets
-        self.roles_sets_codes = list(map(self.roles_code_maker, roles_sets))
-        self.structures_codes = list(map(self.structures_code_maker, structures))
+        self.roles_sets_codes = list(map(self.roles_code_maker, roles_sets)) if roles_sets is not None else []
+        self.structures_codes = list(map(self.structures_code_maker, structures)) if structures is not None else []
 
     def roles_code_maker(self, roles_set):
         """
@@ -500,7 +524,9 @@ class Filter:
         A method to, given a roles set, generate its code.
         :param roles_set: [list] roles of the different nodes.
         """
-        return ''.join(list(map(lambda x: x[0] + x[1] + str(x[2]) + str(x[3]), roles_set)))
+        roles_set.sort(key=lambda x: x[0] + x[1])
+        value = ''.join(list(map(lambda x: x[0] + x[1] + str(x[2]) + str(x[3]), roles_set)))
+        return value
 
     def structures_code_maker(self, structure):
         """
@@ -517,11 +543,11 @@ class Filter:
         """
         condition = True
         # Filtering by roles set
-        if 'roles_set' in kwargs.keys():
+        if 'roles_set' in kwargs.keys() and self.roles_sets_codes:
             kwargs['roles_set'].sort(key=lambda x: x[0])
             condition = condition and self.roles_code_maker(kwargs['roles_set']) in self.roles_sets_codes
         # Filtering by structure
-        if 'structure' in kwargs.keys():
+        if 'structure' in kwargs.keys() and self.structures_codes:
             condition = condition and self.structures_code_maker(kwargs['structure']) in self.structures_codes
         return condition
 

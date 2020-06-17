@@ -23,24 +23,24 @@ def main():
     initial_data = pd.DataFrame(data=content, index=index, columns=columns)
 
     # Generate the graph object
-    attractors = ['00101', '11011', '11010']
-    filter_kernel = {
-                     'roles_sets': [[['I', 'I', 1, 1],
+    attractors = ['10010', '11101', '01101']  # Introduce each one in alphabetical order
+    filter_kernel = {'roles_sets': [[['I', 'I', 1, 1],
                                     ['S', 'I', 1, 1],
-                                    ['S', 'S', 0, 1],
+                                    ['S', 'S', 0, 0],
                                     ['S', 'T', 0, 1],
-                                    ['T', 'S', 0, 1],
+                                    ['T', 'S', 1, 0],
                                     ['T', 'Z', 1, 0],
                                     ['Z', 'D', 0, 1],
-                                    ['Z', 'S', 1, 1],
-                                    ['Z', 'Z', 1, 1],
-                                    ['D', 'D', 0, 0],
-                                    ['D', 'S', 1, 0],
-                                    ['D', 'Z', 1, 0]]],
-                     'structures': [['INPUT', ['IST'], ['Z', 'S'], ['DSZ'], ['DSZ']],
-                                    ['INPUT', ['IST'], ['S', 'Z'], ['DSZ'], ['DSZ']]]
-    }
-    graph = Graph(initial_data=initial_data, attractors=attractors, filter_kernel=filter_kernel)
+                                    ['Z', 'S', 0, 0],
+                                    ['Z', 'Z', 0, 0],
+                                    ['D', 'S', 0, 1],
+                                    ['D', 'Z', 0, 0],
+                                    ['D', 'D', 0, 0]]],
+                     'structures': [['INPUT', ['I', 'S', 'T'], ['SZ'], ['D', 'SZ'], ['S', 'ZD']]]
+                     }
+    imposed_roles_sets = filter_kernel['roles_sets']
+    graph = Graph(initial_data=initial_data, attractors=attractors, filter_kernel=filter_kernel,
+                  imposed_roles_sets=imposed_roles_sets)
 
     # Get another DataFrame with all the possible ncbf.
     tags = ['activators', 'inhibitors']
