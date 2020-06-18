@@ -28,7 +28,7 @@ class NotValidNetworkException(Exception):
         super().__init__('Not valid network found')
 
 
-class ConvergenceError(Exception):
+class ConvergenceException(Exception):
     """
     DESCRIPTION:
     This exception is launched when in the inference algorithm, or the conflicts resolution algorithm, does not reach
@@ -42,4 +42,18 @@ class ConvergenceError(Exception):
         """
         super().__init__('Not solution found')
 
+
+class NotValidAlgorithmException(Exception):
+    """
+    DESCRIPTION:
+    This exception is launched when in the conflicts resolution algorithm, an invalid code for the resolution algorithm
+    is introduced.
+    """
+    # Methods
+    def __init__(self):
+        """
+        DESCRIPTION:
+        Builder of the class
+        """
+        super().__init__('Invalid algorithm code introduced')
 

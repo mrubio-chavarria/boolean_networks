@@ -3,7 +3,7 @@ import sys
 import itertools
 import pandas as pd
 import time
-from utils.exceptions import InputAlterationException
+from utils.exceptions import InputAlterationException, NotValidAlgorithmException
 from utils.utils import Term
 from utils.Kmap import Minterms
 import random
@@ -22,7 +22,7 @@ class ConflictsManager:
     # Attributes
 
     # Methods
-    def __init__(self, activators, inhibitors, priority_matrix, graph, conflicts, network, base_map, node):
+    def __init__(self, activators, inhibitors, priority_matrix, graph, conflicts, network, base_map, node, algorithm='I'):
         """
         DESCRIPTION:
         Builder of the class.
@@ -47,10 +47,15 @@ class ConflictsManager:
         self.conflicts = conflicts
         self.following_group = {'activators': [], 'inhibitors': []}
         self.algorithm_counter = 0
+        self.algorithm = algorithm
         if self.activators != [] and self.inhibitors != []:
             self.set_registry()
-            # list(self.conflicts_resolution_algorithm())
-            self.launch_algorithm()
+            if self.algorithm == 'I':
+                self.launch_first_algorithm()
+            elif self.algorithm == 'II':
+                self.launch_second_algorithm()
+            else:
+                raise NotValidAlgorithmException
 
     def set_registry(self, duple=None):
         """
@@ -75,10 +80,11 @@ class ConflictsManager:
             else:
                 self.registry[duple[1].id] = duple[0]
 
-    def launch_algorithm(self):
+    def launch_first_algorithm(self):
         """
         DESCRIPTION:
-        The method which holds the recurrent algorithm to solve the conflicts, provided a set of pathways.
+        The first method that we devised. It holds the recurrent algorithm to solve the conflicts, provided a set of
+        pathways.
         """
         # Initial parameters
         working_group = []
@@ -144,7 +150,7 @@ class ConflictsManager:
             self.algorithm_counter += 1
             if self.algorithm_counter > counter_limit:
                 raise RecursionError
-            self.launch_algorithm()
+            self.launch_first_algorithm()
         else:
             completed_activators = [False]*len(self.activators)
             if len(self.activators + self.inhibitors) > pathways_limit:
@@ -161,7 +167,15 @@ class ConflictsManager:
                 self.algorithm_counter += 1
                 if self.algorithm_counter > counter_limit:
                     raise RecursionError
-                self.launch_algorithm()
+                self.launch_first_algorithm()
+
+    def launch_second_algorithm(self):
+        """
+        DESCRIPTION:
+        The second method that we devised. It holds the recurrent algorithm to solve the conflicts, provided a set of
+        pathways.
+        """
+        return 3
 
     def conflicts_resolution_algorithm(self, activators=None, inhibitors=None, following=None):
         """

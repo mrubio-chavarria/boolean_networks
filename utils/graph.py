@@ -534,7 +534,13 @@ class Filter:
         A method to, given a roles set, generate its code.
         :param structure: [list] structure of the network.
         """
-        return '@'.join(['$'.join(node) if type(node) != str else node for node in structure])
+        return '@'.join(
+            [
+                '$'.join([''.join(sorted(step)) if len(step) > 1 else step for step in path])
+                if path != 'INPUT'
+                else path for path in structure
+            ]
+        )
 
     def clean(self, **kwargs):
         """

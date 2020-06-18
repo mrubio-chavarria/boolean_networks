@@ -119,6 +119,7 @@ class Validation:
                                                        conflicts=conflicts,
                                                        base_map=network.map,
                                                        graph=network.variant.data,
+                                                       algorithm='I',
                                                        node=node)
                             pathways.extend(manager.get_solution())
                             pathways.sort(key=lambda x: x.consequent)
