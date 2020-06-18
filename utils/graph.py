@@ -1,5 +1,4 @@
 from functools import reduce
-from utils.ncbf import blosum_generator
 import pandas as pd
 import uuid
 import itertools
@@ -16,7 +15,8 @@ class Graph:
     """
 
     # Methods
-    def __init__(self, initial_data, attractors=None, filter_kernel=None, imposed_roles_sets=None):
+    def __init__(self, initial_data, attractors=None, filter_kernel=None, imposed_roles_sets=None, simulations=20,
+                 variants_limit=None, max_global_iterations=20, max_local_iterations=20):
         """
         DESCRIPTION:
         Builder of the object graph.
@@ -24,6 +24,10 @@ class Graph:
         :param attractors: [list] strings containing the attractors for the validation.
         :param filter_kernel: [dictionary] all the data to perform the filtration.
         :param imposed_roles_sets: [list] roles sets imposed externally, not directly inferred from the graph.
+        :param simulations: [int] number of simulations to be performed in every network.
+        :param variants_limit: [int] limit to the number of variants to be generated.
+        :param max_global_iterations: [int] parameter to set the maximum number of iterations in every network.
+        :param max_local_iterations: [int] parameter to set the maximum number of iterations for the conflicts solver.
         """
         # Set the attributes
         self.initial_data = initial_data
@@ -33,6 +37,7 @@ class Graph:
         self.space = self.get_space()
         self.attractors = attractors
         # Impose the given roles sets
+        self.imposed_roles_sets = []
         if imposed_roles_sets is not None:
             [list(map(lambda x: x.append(str(x[-2]) + str(x[-1])), roles_set)) for roles_set in imposed_roles_sets]
             self.imposed_roles_sets = imposed_roles_sets if imposed_roles_sets is not None else []
@@ -43,14 +48,16 @@ class Graph:
         self.roles_combinations = self.get_roles_combinations()
         # Set the variants of the network
         print('Generating variants')
-        self.variants = self.get_variants()
+        self.variants = self.get_variants(limit=variants_limit)
         print('Variants generation completed')
-        print('Generating networks')
+        print('Searching for networks')
         self.networks = self.get_networks()
-        print('Networks generation completed')
+        print('Networks search completed')
         print('Launch the validation of the networks')
         self.validation = Validation(networks=self.networks, nodes=[node.name for node in self.get_nodes()],
-                                     inputs=self.inputs, attractors=self.attractors)
+                                     inputs=self.inputs, attractors=self.attractors, simulations=simulations,
+                                     max_global_iterations=max_global_iterations,
+                                     max_local_iterations=max_local_iterations)
         print()
 
     def __str__(self):
@@ -332,11 +339,7 @@ class Variant:
         self.pathways = list(self.get_initial_pathways())
         self.paths = self.get_paths()
         self.networks = self.get_networks()
-        self.priority_matrix = self.get_priority_matrix()
         self.roles_code = self.get_roles_code()
-        file = open('codes.txt', 'a')
-        file.write('\n' + self.roles_code)
-        file.close()
 
     def __str__(self):
         """
@@ -409,15 +412,6 @@ class Variant:
                     else:
                         yield Pathway(antecedent=el, consequent=self.data.index[i], activator=False, space=self.space)
 
-    def get_priority_matrix(self):
-        """
-        DESCRIPTION:
-        A method to obtain the priority matrix associated with the variant. It will be employed during the validation.
-        """
-        if 'priority_matrix' not in dir(self):
-            self.priority_matrix = blosum_generator(self.data)
-        return self.priority_matrix
-
     def get_roles_code(self):
         """
         DESCRIPTION:
@@ -427,6 +421,7 @@ class Variant:
             self.roles.sort(key=lambda x: x[0] + x[1])
             self.roles_code = ''.join(list(map(lambda x: x[0] + x[1] + str(x[2]) + str(x[3]), self.roles)))
         return self.roles_code
+
 
 class Network:
     """
@@ -455,7 +450,8 @@ class Network:
         Method to obtain a readable representation of the object.
         :return: [string] a readable representation of the object.
         """
-        return '|'.join([' '.join(step) for step in self.structure if step != 'INPUT'])
+        exprs = '$'.join([path.expression for path in self.pathways])
+        return '|'.join([' '.join(step) for step in self.structure if step != 'INPUT']) + ' @ ' + exprs
 
     def get_map(self):
         """

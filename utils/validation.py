@@ -3,11 +3,11 @@ import uuid
 import pytictoc
 import progressbar
 from functools import reduce
-
+from pytictoc import TicToc
 from alive_progress import alive_bar
 
 from utils.conflicts_theory import Pathway, KMap, ConflictsManager
-from utils.exceptions import InputAlterationException, NotValidNetworkException
+from utils.exceptions import InputAlterationException, NotValidNetworkException, ConvergenceException
 from utils.hibrids import Result
 from utils.ncbf import blosum_generator
 from PyBoolNet import StateTransitionGraphs, Attractors, FileExchange
@@ -19,7 +19,8 @@ class Validation:
     An object to standardize the different kinds of validation gathered in in ncbf.py.
     """
 
-    def __init__(self, networks, nodes, inputs, kind='III', attractors=None):
+    def __init__(self, networks, nodes, inputs, kind='III', max_global_iterations=20, max_local_iterations=20,
+                 attractors=None, simulations=20):
         """
         DESCRIPTION:
         Builder of the object Validation.
@@ -28,23 +29,20 @@ class Validation:
         :param nodes: [list] names of the nodes of the network.
         :param inputs: [list] nodes that are inputs.
         :param attractors: [list] strings containing the attractors for the validation.
+        :param simulations: [int] number of simulations to be performed in the conflicts resolution.
+        :param max_global_iterations: [int] parameter to set the maximum number of iterations all around the network.
+        :param max_local_iterations: [int] parameter to set the maximum number of iterations in conflicts solver.
         """
-        self.id = f'vd{uuid.uuid1()}'
         self.type = kind
         self.networks = networks
         self.nodes = nodes
         self.inputs = inputs
+        self.simulations = simulations
+        self.max_global_iterations = max_global_iterations
+        self.max_local_iterations = max_local_iterations
         self.attractors = attractors
         self.space = self.get_space()
         self.results = self.execute_validation()
-
-    def __str__(self):
-        """
-        DESCRIPTION:
-        String method of the object
-        :return: [string] a readable representation of the object.
-        """
-        return f'Validation: ID {self.id}'
 
     def get_space(self):
         """
@@ -81,19 +79,19 @@ class Validation:
                     else:
                         yield Pathway(antecedent=el, consequent=self.nodes[i], activator=False, space=self.get_space())
 
-    def third_validation(self, simulations=20, max_iterations=2000, max_pathways=6400):
+    def third_validation(self, max_pathways=6400):
         """
         DESCRIPTION:
         The mechanism of validation to obtain the corrected maps with all the generated pathways according to the given,
         initial, map.
-        :param simulations: [int] parameter to set the number of simulations to perform.
-        :param max_iterations: [int] parameter to set the maximum number of iterations all around the network.
         :param max_pathways: [int] parameter to set the maximum number of pathways.
         """
         # Launch the simulations
-        with alive_bar(simulations*len(self.networks)) as bar:
-            for m in range(0, simulations):
+        with alive_bar(self.simulations*len(self.networks)) as bar:
+            for m in range(0, self.simulations):
                 for network in self.networks:
+                    # Generate the priority matrix
+                    priority_matrix = blosum_generator(network.variant.data)
                     condition_result = True  # set the condition to append the result of the simulation
                     pathways = network.pathways[:]
                     n_pathways = len(pathways)  # number of pathways
@@ -114,12 +112,13 @@ class Validation:
                             pathways = list(filter(lambda x: x.consequent != node, pathways))
                             manager = ConflictsManager(activators=node_pathways['activators'],
                                                        inhibitors=node_pathways['inhibitors'],
-                                                       priority_matrix=network.variant.priority_matrix,
+                                                       priority_matrix=priority_matrix,
                                                        network=network.structure,
                                                        conflicts=conflicts,
                                                        base_map=network.map,
                                                        graph=network.variant.data,
                                                        algorithm='I',
+                                                       max_iterations=self.max_local_iterations,
                                                        node=node)
                             pathways.extend(manager.get_solution())
                             pathways.sort(key=lambda x: x.consequent)
@@ -144,7 +143,7 @@ class Validation:
                             # Validation
                             if i == len(network.variant.data.index) - 1:
                                 iter_count += 1
-                                if iter_count >= max_iterations:
+                                if iter_count >= self.max_global_iterations:
                                     condition_result = False
                                     break
                                 if len(pathways) != n_pathways:
@@ -155,6 +154,9 @@ class Validation:
                     except InputAlterationException:
                         # If the map of the INPUT is altered the simulation is not valid.
                         condition_result = False
+                    except ConvergenceException:
+                        # If the resolution does not converge
+                        condition_result = False
                     # Update progress
                     bar()
                     # Check the condition and add the new result
@@ -162,6 +164,7 @@ class Validation:
                         # Apply all the pathways over the map
                         network.map.modificate_maps(pathways)
                         # Get the expression from the maps
+                        t = TicToc()
                         expressions = list(network.map.get_expressions())
                         # Validation with the attractors
                         primes = FileExchange.bnet2primes('\n'.join(expressions))
@@ -186,6 +189,19 @@ class Validation:
         A method to perform the validation according to the different validation methods.
         :return: [list] the results of the validation.
         """
+        # Auxiliary functions
+        def results_filter(results):
+            codes = []
+            attractors = []
+            for result in results:
+                if result.code not in codes:
+                    codes.append(result.code)
+                    if result.attractors not in attractors:
+                        attractors.append(result.attractors)
+                        if result.accepted:
+                            yield result
+
+
         # Select between the different methods of validation
         if self.type == 'I':
             # First method of validation
@@ -195,9 +211,9 @@ class Validation:
             pass
         if self.type == 'III':
             # Third method of validation
-            simulations = 20
-            results = list(self.third_validation(simulations=simulations))
-            filtered_results = list(filter(lambda x: x.accepted, results))
+            codes = []
+            results = list(self.third_validation())
+            filtered_results = list(results_filter(results))
         return results
 
 

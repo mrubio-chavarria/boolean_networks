@@ -3,7 +3,10 @@ import sys
 import itertools
 import pandas as pd
 import time
-from utils.exceptions import InputAlterationException, NotValidAlgorithmException
+
+from pytictoc import TicToc
+
+from utils.exceptions import InputAlterationException, NotValidAlgorithmException, ConvergenceException
 from utils.utils import Term
 from utils.Kmap import Minterms
 import random
@@ -22,7 +25,8 @@ class ConflictsManager:
     # Attributes
 
     # Methods
-    def __init__(self, activators, inhibitors, priority_matrix, graph, conflicts, network, base_map, node, algorithm='I'):
+    def __init__(self, activators, inhibitors, priority_matrix, graph, conflicts, network, base_map, node,
+                 max_iterations=100, algorithm='I'):
         """
         DESCRIPTION:
         Builder of the class.
@@ -34,12 +38,15 @@ class ConflictsManager:
         :param base_map: [pandas DataFrame] representation of the truth table of all nodes.
         :param node: [string] node to which belong the conflicts solved.
         :param conflicts: [list] group of conflicts to be extended.
+        :param max_iterations: [int] parameter to set the maximum number of iterations at the moment of solving the
+        conflicts of each node.
         """
         self.activators = activators
         self.inhibitors = inhibitors
         self.priority_matrix = priority_matrix
         self.graph = graph
         self.network = network
+        self.max_iterations = max_iterations
         self.base_map = base_map
         self.node = node
         self.extra_pathways = []
@@ -49,36 +56,39 @@ class ConflictsManager:
         self.algorithm_counter = 0
         self.algorithm = algorithm
         if self.activators != [] and self.inhibitors != []:
-            self.set_registry()
-            if self.algorithm == 'I':
-                self.launch_first_algorithm()
-            elif self.algorithm == 'II':
-                self.launch_second_algorithm()
-            else:
-                raise NotValidAlgorithmException
+            self.registry = self.set_registry(registry=self.registry, activators=self.activators,
+                                              inhibitors=self.inhibitors)
+        if self.algorithm == 'I':
+            self.launch_first_algorithm()
+        elif self.algorithm == 'II':
+            self.launch_second_algorithm()
+        else:
+            raise NotValidAlgorithmException
 
-    def set_registry(self, duple=None):
+    def set_registry(self, registry, activators, inhibitors, duple=None):
         """
         DESCRIPTION:
         Method to establish the registry at any time given the accumulated data.
+        :param registry: [dictionary] registry to be altered.
         :param duple: [tuple] pair to be registered.
         """
         # Initial case
         if duple is None:
-            if not self.registry:
-                self.registry = {key: [] for key in [path.id for path in self.activators + self.inhibitors]}
+            if not registry:
+                registry = {key: [] for key in [path.id for path in activators + inhibitors]}
             else:
-                [self.registry.update({key: []}) for key in [path.id for path in self.activators + self.inhibitors]
-                 if key not in self.registry.keys()]
+                [registry.update({key: []}) for key in [path.id for path in activators + inhibitors]
+                 if key not in registry.keys()]
         elif duple is not None:
-            if duple[0].id in self.registry.keys():
-                self.registry[duple[0].id].append(duple[1])
+            if duple[0].id in registry.keys():
+                registry[duple[0].id].append(duple[1])
             else:
-                self.registry[duple[0].id] = duple[1]
-            if duple[1].id in self.registry.keys():
-                self.registry[duple[1].id].append(duple[0])
+                registry[duple[0].id] = duple[1]
+            if duple[1].id in registry.keys():
+                registry[duple[1].id].append(duple[0])
             else:
-                self.registry[duple[1].id] = duple[0]
+                registry[duple[1].id] = duple[0]
+        return registry
 
     def launch_first_algorithm(self):
         """
@@ -86,88 +96,96 @@ class ConflictsManager:
         The first method that we devised. It holds the recurrent algorithm to solve the conflicts, provided a set of
         pathways.
         """
-        # Initial parameters
-        working_group = []
-        current_inhibitors = []
-        pathways_limit = 100
-        counter_limit = 1000
-        # Delete repeated pathways in activators, inhibitors and extra_pathways
-        codes = []
-        activators = []
-        inhibitors = []
-        extra = []
-        [(codes.append(pathway.code), activators.append(pathway))
-         if pathway.activator else (codes.append(pathway.code), inhibitors.append(pathway))
-         for pathway in self.activators + self.inhibitors if pathway.code not in codes]
-        [(codes.append(pathway.code), extra.append(pathway)) for pathway in self.extra_pathways
-         if pathway.code not in codes]
-        self.activators = activators
-        self.inhibitors = inhibitors
-        self.extra_pathways = extra
-        # Add the following group of the last iteration
-        [self.activators.append(pathway) if pathway.activator else self.inhibitors.append(pathway)
-         for pathway in self.following_group['inhibitors'] + self.following_group['activators']]
-        self.following_group['activators'] = []
-        self.following_group['inhibitors'] = []
-        # Set the working group
-        for act in self.activators:
-            inhs = [inh for inh in self.inhibitors if inh not in self.registry[act.id] and inh not in current_inhibitors]
-            inh = random.choice(inhs) if inhs else None
-            if inh is None:
-                self.following_group['activators'].append(act)
-                continue
-            current_inhibitors.append(inh)
-            working_group.append((act, inh))
-        if not self.activators:  # it wont happen
-            self.following_group['inhibitors'].extend(self.inhibitors)
-        # Set the non-paired inhibitors in the next round
-        [self.following_group['inhibitors'].append(inh) for inh in self.inhibitors if inh not in current_inhibitors]
-        # Solve the conflicts
-        new_pathways = []
-        change_pathways = [False]*len(working_group)
-        for i in range(0, len(working_group)):
-            # Set evidence in registry
-            self.set_registry(working_group[i])
-            # Calculate conflicts
-            psi = set(working_group[i][0].region_of_interest) & set(working_group[i][1].region_of_interest)
-            if len(psi) > 0:
-                conflict = Conflict(working_group[i][0], working_group[i][1], priority_matrix=self.priority_matrix,
-                                    psi=psi, graph=self.graph)
-                self.conflicts.append(conflict)
-                new_pathways.extend(conflict.solve2(self.network, self.base_map))
-                change_pathways[i] = True
+        # Parameters
+        general_inhibitors = self.inhibitors
+        general_activators = self.activators
+        following_group = self.following_group
+        extra_pathways = self.extra_pathways
+        registry = self.registry
+        iterations = -1
+        while True:
+            iterations += 1
+            # Check that we are under the limit
+            if iterations >= self.max_iterations:
+                raise ConvergenceException
+            # Initial parameters
+            working_group = []
+            current_inhibitors = []
+            pathways_limit = 100
+            # Delete repeated pathways in activators, inhibitors and extra_pathways
+            codes = []
+            activators = []
+            inhibitors = []
+            extra = []
+            [(codes.append(pathway.code), activators.append(pathway))
+             if pathway.activator else (codes.append(pathway.code), inhibitors.append(pathway))
+             for pathway in general_activators + general_inhibitors if pathway.code not in codes]
+            [(codes.append(pathway.code), extra.append(pathway)) for pathway in extra_pathways
+             if pathway.code not in codes]
+            general_activators = activators
+            general_inhibitors = inhibitors
+            extra_pathways = extra
+            # Add the following group of the last iteration
+            [general_activators.append(pathway) if pathway.activator else general_inhibitors.append(pathway)
+             for pathway in following_group['inhibitors'] + following_group['activators']]
+            following_group['activators'] = []
+            following_group['inhibitors'] = []
+            # Set the working group
+            for act in general_activators:
+                inhs = [inh for inh in general_inhibitors if inh not in registry[act.id] and inh not in current_inhibitors]
+                inh = random.choice(inhs) if inhs else None
+                if inh is None:
+                    following_group['activators'].append(act)
+                    continue
+                current_inhibitors.append(inh)
+                working_group.append((act, inh))
+            if not general_activators:  # it wont happen
+                following_group['inhibitors'].extend(general_inhibitors)
+            # Set the non-paired inhibitors in the next round
+            [following_group['inhibitors'].append(inh) for inh in general_inhibitors if inh not in current_inhibitors]
+            # Solve the conflicts
+            new_pathways = []
+            change_pathways = [False]*len(working_group)
+            for i in range(0, len(working_group)):
+                # Set evidence in registry
+                registry = self.set_registry(duple=working_group[i], activators=general_activators,
+                                             inhibitors=general_inhibitors, registry=registry)
+                # Calculate conflicts
+                psi = set(working_group[i][0].region_of_interest) & set(working_group[i][1].region_of_interest)
+                if len(psi) > 0:
+                    conflict = Conflict(working_group[i][0], working_group[i][1], priority_matrix=self.priority_matrix,
+                                        psi=psi, graph=self.graph)
+                    self.conflicts.append(conflict)
+                    new_pathways.extend(conflict.solve2(self.network, self.base_map))
+                    change_pathways[i] = True
+                else:
+                    new_pathways.extend([working_group[i][0], working_group[i][1]])
+            # Redistribute the new pathways
+            if any(change_pathways):
+                general_activators = list(filter(lambda x: x.consequent == self.node and x.activator, new_pathways))
+                general_inhibitors = list(filter(lambda x: x.consequent == self.node and not x.activator, new_pathways))
+                # Add the extra pathways
+                extra_pathways = self.add_extra_pathways(new_pathways, extra_pathways)
+                # Register the new pathways and repeat
+                registry = self.set_registry(registry, general_activators, general_inhibitors)
             else:
-                new_pathways.extend([working_group[i][0], working_group[i][1]])
-        # Redistribute the new pathways
-        if any(change_pathways):
-            self.activators = list(filter(lambda x: x.consequent == self.node and x.activator, new_pathways))
-            self.inhibitors = list(filter(lambda x: x.consequent == self.node and not x.activator, new_pathways))
-            # Add the extra pathways
-            self.add_extra_pathways(new_pathways)
-            # Register the new pathways
-            self.set_registry()
-            # New pathways, launch again the algorithm
-            self.algorithm_counter += 1
-            if self.algorithm_counter > counter_limit:
-                raise RecursionError
-            self.launch_first_algorithm()
-        else:
-            completed_activators = [False]*len(self.activators)
-            if len(self.activators + self.inhibitors) > pathways_limit:
-                # If we enter into a cyclic generation of pathways we are to stop. TO BE IMPROVED.
-                raise ValueError
-            for i in range(0, len(self.activators)):
-                unregistered_inhibitors = list(
-                    filter(lambda x: x not in self.registry[self.activators[i].id], self.inhibitors)
-                )
-                if not unregistered_inhibitors:
-                    completed_activators[i] = True
-            if not all(completed_activators):
-                # There pathways to compare, launch the algorithm again
-                self.algorithm_counter += 1
-                if self.algorithm_counter > counter_limit:
-                    raise RecursionError
-                self.launch_first_algorithm()
+                completed_activators = [False]*len(general_activators)
+                if len(general_activators + general_inhibitors) > pathways_limit:
+                    # If we enter into a cyclic generation of pathways we are to stop. TO BE IMPROVED.
+                    raise ConvergenceException
+                for i in range(0, len(general_activators)):
+                    unregistered_inhibitors = list(filter(lambda x: x not in registry[general_activators[i].id],
+                                                          general_inhibitors))
+                    if not unregistered_inhibitors:
+                        completed_activators[i] = True
+                if all(completed_activators):
+                    break
+        self.inhibitors = general_inhibitors
+        self.activators = general_activators
+        self.following_group = following_group
+        self.extra_pathways = extra_pathways
+        self.registry = registry
+
 
     def launch_second_algorithm(self):
         """
@@ -176,25 +194,6 @@ class ConflictsManager:
         pathways.
         """
         return 3
-
-    def conflicts_resolution_algorithm(self, activators=None, inhibitors=None, following=None):
-        """
-        DESCRIPTION:
-        The improved version of the algorithm above.
-        :return: [list] final set of pathways.
-        """
-        if activators is not None and inhibitors is not None:
-            # Case in which we are inside the nested iteration
-            pairs = pd.DataFrame(columns=['activators', 'inhibitors'])
-            for activator in activators:
-                pass
-        else:
-            # Case in which the method is called for the first time
-            # Get the initial parameters
-            activators = self.activators[:]
-            inhibitors = self.inhibitors[:]
-            # Solve
-            yield from self.conflicts_resolution_algorithm(activators=activators, inhibitors=inhibitors)
 
 
     def get_solution(self):
@@ -209,19 +208,20 @@ class ConflictsManager:
         # TO BE IMPLEMENTED IF NECESSARY
         return pathways
 
-    def add_extra_pathways(self, local_pathways):
+    def add_extra_pathways(self, new_pathways, old_pathways):
         """
         DESCRIPTION:
         A method to filter the addition of new pathways in every addition. And to avoid the repeated ones.
         :params pathways: [list] pathways to be added in extra pathways.
         """
-        self.extra_pathways.extend(local_pathways)
-        self.extra_pathways = list(filter(lambda x: x.consequent != self.node, self.extra_pathways))
+        old_pathways.extend(new_pathways)
+        pathways = list(filter(lambda x: x.consequent != self.node, old_pathways))
         # Filtering for repeated extra pathways
         codes = []
         extra_pathways = []
-        [(codes.append(pathway.code), extra_pathways.append(pathway)) for pathway in self.extra_pathways
+        [(codes.append(pathway.code), extra_pathways.append(pathway)) for pathway in pathways
          if pathway.code not in codes]
+        return pathways
 
 
 class Pathway:
@@ -256,7 +256,8 @@ class Pathway:
             self.set_map(space)
 
     def __str__(self):
-        return self.antecedent + ' --> ' + self.consequent + '\n Activator: ' + str(self.activator)
+        return self.antecedent + ' --> ' + self.consequent + ' Activator: ' + str(self.activator) + ' Expression: '\
+               + self.expression
 
     def set_expression(self, psi, graph, variables):
         """
@@ -290,11 +291,11 @@ class Pathway:
         new_psi = []
         [new_psi.append(it) for sl in [[[var, self.expression] for var in group] for group in psi] for it in sl
          if minterm_checker(it) if it not in new_psi]
-        psi = [list(set(term)) for term in new_psi]
+        psi_2 = [list(set(term)) for term in new_psi]
         # Make all the necessary pathways
         r = re.compile('\w')
         new_pathways = []
-        for group in psi:
+        for group in psi_2:
             expression = '&'.join(group)
             antecedent = ''.join(r.findall(expression))
             new_pathways.append(Pathway(antecedent=antecedent, consequent=self.consequent, activator=self.activator,
@@ -335,10 +336,7 @@ class Pathway:
         factors = self.expression.split('&')
         for i in range(0, len(factors)):
             if role[1] in factors[i]:
-                if len(factors[i]) == 2 and role[2] == 0:
-                    factors[i] = factors[i][-1]
-                elif len(factors[i]) == 1 and role[2] == 1:
-                    factors[i] = '!' + factors[i]
+                if role[2] == 0:
                     factors[i] = '!' + factors[i]
         self.expression = '&'.join(factors)
 
@@ -515,9 +513,12 @@ class Conflict:
                     if high_pathway.eval_expression(variable)]
         base_map.maps.at[high_pathway.consequent, minterms] = high_pathway.activator
         positions = base_map.maps.loc[high_pathway.consequent, :]
-        minterms = [int(position[0], 2) for position in positions[positions != high_pathway.activator].index]
+        value = positions[positions != high_pathway.activator].index
+        minterms = [int(position, 2) for position in positions[positions != high_pathway.activator].index]
         simplified_minterms = str(simplify(list(self.graph.index), minterms)).replace(' ', '').replace('~', '!').\
-            split('|')
+            split('|') if minterms else []
+        r = re.compile('[^\(\)].*?')
+        simplified_minterms = [''.join(r.findall(minterm)) for minterm in simplified_minterms]
         # Select the most advantageous term
         # TO BE IMPLEMENTED. By this time it is only selected a random term.
         r = re.compile('\w')
@@ -536,6 +537,8 @@ class Conflict:
                 var = var[0]
                 activator = True
             antecedent = r.findall(original_psi)  # The antecedent is supposed to be built upon the letter only
+            if var not in self.graph.index:
+                raise IndexError
             new_pathways.append(Pathway(antecedent=antecedent, consequent=var, activator=activator, space=variables))
         # Send the pathways
         new_pathways.append(high_pathway)
@@ -641,6 +644,7 @@ class KMap:
         :param pathways: [list] pathways to be implemented over the map. Without any conflict. Directly.
         """
         def aux_fun(pathway):
+            value = pathway.consequent
             self.maps.loc[pathway.consequent, list(pathway.region_of_interest)] = pathway.activator
         list(map(aux_fun, pathways))
 
@@ -651,19 +655,25 @@ class KMap:
         :return: the expressions in BoolNet format of the nodes encoded in the set of maps.
         """
         # Obtain the letters
+        t = TicToc()
         nodes = self.maps.index
         # Simplification with KMaps
         for node in nodes:
             minterms = [it[0] for it in filter(lambda x: x[1], enumerate(self.maps.loc[node, :].tolist()))]
-            sop = simplify(list(self.graph.index), minterms)
-            if sop.is_Symbol:
-                yield node + ', ' + str(sop)
+            if not minterms:
+                yield node + ', 0'
             else:
-                if sop.is_Function:
-                    time.sleep(10)
-                    yield node + ', ' + '|'.join(str(sop).replace(' ', '').replace('~', '!').split('|'))
+                sop = simplify(list(self.graph.index), minterms)
+                if sop.is_Symbol:
+                    yield node + ', ' + str(sop)
                 else:
-                    (yield node + ', 1') if sop.canonical else (yield node + ', 0')
+                    if sop.is_Function:
+                        yield node + ', ' + '|'.join(str(sop).replace(' ', '').replace('~', '!').split('|'))
+                    else:
+                        if sop.canonical:
+                            yield node + ', 0'
+                        else:
+                            yield node + ', 1'
 
     def get_space(self):
         """
@@ -771,7 +781,8 @@ def simplify(symbols, minterms):
     :return: [Symbol] products of the sum of products in boolnet format.
     """
     variables = ' '.join(symbols)
-    return SOPform(variables=sympy.symbols(variables), minterms=minterms, dontcares=[])
+    value = SOPform(variables=sympy.symbols(variables), minterms=minterms, dontcares=[])
+    return value
 
 
 
