@@ -1,4 +1,5 @@
 import json
+import sys
 
 
 class Result:
@@ -46,12 +47,17 @@ class Result:
         if self.code is None:
             net = ''.join([it for sl in self.network for it in sl])
             codes = ['$']
-            try:
-                [codes.append(f'{str(hex(int("".join(pathway.region_of_interest), 2)))}:{pathway.consequent}|')
-                 for pathway in self.pathways]
-            except ValueError:
-                print('holaaaaaaa')
-                print()
+            for pathway in self.pathways:
+                try:
+                    codes.append(f'{str(hex(int("".join(pathway.region_of_interest), 2)))}:{pathway.consequent}|')
+                except ValueError:
+                    print(sys.exc_info())
+                    print('holaaaaaaa')
+                    print()
+            """
+            [codes.append(f'{str(hex(int("".join(pathway.region_of_interest), 2)))}:{pathway.consequent}|')
+             for pathway in self.pathways]
+            """
             code = ''.join(codes) + '$'
         else:
             code = self.code

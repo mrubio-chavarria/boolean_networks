@@ -1,3 +1,4 @@
+import copy
 from functools import reduce
 import pandas as pd
 import uuid
@@ -58,6 +59,8 @@ class Graph:
                                      inputs=self.inputs, attractors=self.attractors, simulations=simulations,
                                      max_global_iterations=max_global_iterations,
                                      max_local_iterations=max_local_iterations)
+        # Obtain the results of the validation
+        self.results = self.validation.get_results()
         print()
 
     def __str__(self):
@@ -247,7 +250,8 @@ class Graph:
             for variant in self.get_variants():
                 for network in variant.get_networks():
                     if self.filter.clean(structure=network):
-                        yield Network(structure=network, variant=variant)
+                        # The copy is needed to avoid the recursive application over all pathways
+                        yield Network(structure=network, variant=copy.deepcopy(variant))
                     bar()
 
 
@@ -550,7 +554,8 @@ class Filter:
             condition = condition and self.roles_code_maker(kwargs['roles_set']) in self.roles_sets_codes
         # Filtering by structure
         if 'structure' in kwargs.keys() and self.structures_codes:
-            condition = condition and self.structures_code_maker(kwargs['structure']) in self.structures_codes
+            code = self.structures_code_maker(kwargs['structure'])
+            condition = condition and code in self.structures_codes
         return condition
 
 

@@ -42,7 +42,10 @@ class Validation:
         self.max_local_iterations = max_local_iterations
         self.attractors = attractors
         self.space = self.get_space()
-        self.results = self.execute_validation()
+        # Obtain the results of the validation
+        self.results = None
+        self.filtered_results = None
+        self.execute_validation()
 
     def get_space(self):
         """
@@ -78,6 +81,14 @@ class Validation:
                         yield Pathway(antecedent=el, consequent=self.nodes[i], activator=True, space=self.get_space())
                     else:
                         yield Pathway(antecedent=el, consequent=self.nodes[i], activator=False, space=self.get_space())
+
+    def get_results(self):
+        """
+        DESCRIPTION:
+        A method to return the results in a unique object.
+        :return: [dictionary] non filtered and filtered results.
+        """
+        return {'results': self.results, 'filtered_results': self.filtered_results}
 
     def third_validation(self, max_pathways=6400):
         """
@@ -183,37 +194,52 @@ class Validation:
                         result.accepted = all([True if att in steady else False for att in self.attractors])
                         yield result
 
+    def group_results(self):
+        """
+        DESCRIPTION:
+        This method is devised to group the networks according to its similarity to the one described through the
+        attractors.
+        :return: [dictionary] grouped results.
+        """
+        # Group by cyclic and steady attractors presence
+        non_cyclic_results = [result for result in self.results if len(result.attractors['cyclic']) == 0]
+        # With the same number of steady states and non cyclic
+        steadies = [result for result in non_cyclic_results if len(result.attractors['steady']) == len(self.attractors)]
+        # Group by number of steady attractors of the list
+        one_of_all = [result for result in steadies
+                      if len([att for att in self.attractors if att in result.attractors]) == 1]
+        two_of_all = [result for result in steadies
+                      if len([att for att in self.attractors if att in result.attractors]) == 2]
+        three_of_all = [result for result in steadies if result.accepted]
+        # Organize the response
+        grouped_results = {
+            'total_results': self.results,
+            'non_cyclic_results': non_cyclic_results,
+            'same_number': steadies,
+            'one_of_all': one_of_all,
+            'two_of_all': two_of_all,
+            'three_of_all': three_of_all
+        }
+        return grouped_results
+
     def execute_validation(self):
         """
         DESCRIPTION:
         A method to perform the validation according to the different validation methods.
         :return: [list] the results of the validation.
         """
-        # Auxiliary functions
-        def results_filter(results):
-            codes = []
-            attractors = []
-            for result in results:
-                if result.code not in codes:
-                    codes.append(result.code)
-                    if result.attractors not in attractors:
-                        attractors.append(result.attractors)
-                        if result.accepted:
-                            yield result
-
 
         # Select between the different methods of validation
         if self.type == 'I':
             # First method of validation
-            pass
+            self.results = []
         elif self.type == 'II':
             # Second method of validation
-            pass
+            self.results = []
         if self.type == 'III':
             # Third method of validation
-            codes = []
-            results = list(self.third_validation())
-            filtered_results = list(results_filter(results))
-        return results
-
+            self.results = list(self.third_validation())
+        # Group results by similarity
+        grouped_results = self.group_results()
+        print()
 

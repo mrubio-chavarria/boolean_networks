@@ -751,7 +751,6 @@ def netValidator(initial_networks=None, initial_graph=None, original_networks=No
          if result.code not in codes]
         return final_results
 
-    """ This is necessary for the first validation
     # Extend the original networks and execute the validation
     num_sets_conflicts_networks = len(unfixed_sets_conflicts_networks)
     assessed_networks = []
@@ -759,10 +758,9 @@ def netValidator(initial_networks=None, initial_graph=None, original_networks=No
     for i in range(0, num_sets_conflicts_networks):
         extended_ncbf_networks.extend(list(first_validation(unfixed_sets_conflicts_networks[i],
                                                             unfixed_conflicts_graphs[i], assessed_networks)))
-    """
 
     # Extend the original networks with the errors with fixed structure
-    final_networks = third_validation(initial_graph)
+    final_networks = first_validation(initial_graph)
 
     return final_networks
 
