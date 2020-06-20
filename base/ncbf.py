@@ -1,9 +1,12 @@
+#! /usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 """
 INDICATIONS:
 In this file, they are given several utilities to the calculation of nested canalizing boolean functions
 (boolean_networks).
 """
+
 from itertools import combinations, permutations, product
 from functools import reduce
 from operator import add
@@ -593,6 +596,61 @@ def netValidator(initial_networks=None, initial_graph=None, original_networks=No
     extended_ncbf_networks = list(first_validation(unfixed_conflicts_graphs=unfixed_conflicts_graphs,
                                                    unfixed_sets_conflicts_networks=unfixed_sets_conflicts_networks))
     return extended_ncbf_networks
+
+
+def post_process(unfixed_sets_conflicts_networks, unfixed_conflicts_graphs, original_networks, original_graph,
+                 attractors, limit=None):
+    """
+    DESCRIPTION:
+    The function to extend the networks with the given conflicts sets.
+    :param unfixed_sets_conflicts_networks: [list] sets of paths, with different structures for the networks
+    according to each set of path. But these are partial structures, they only describe expressions for the new
+    nodes.
+    :param unfixed_conflicts_graphs: [list] the same as before but for the graphs. All the possible graphs
+    describing only the new nodes. Different graphs, different set of paths with all possible combinations.
+    :param limit: [int] number of networks to be extended.
+    :param original_networks: [list] structures devoted to the extension of the network. They incorporate the new nodes
+    but they only represent the expressions of the original nodes.
+    :param original_graph: [pandas DataFrame] the same concept of original networks but extrapolated to the graph. The
+    expressions of the original nodes with the new nodes.
+    :param attractors: [list] strings representing the steady states of the network which we are looking for.
+    :return: [dictionary] final network with its attractors.
+    """
+    print('Extending networks')
+    num_sets_conflicts_networks = len(unfixed_sets_conflicts_networks) if limit is None else limit
+    assessed_networks = []
+    with alive_bar(len(original_networks)*num_sets_conflicts_networks) as bar:
+        for i in range(0, num_sets_conflicts_networks):
+            conflicts_networks = unfixed_sets_conflicts_networks[i]
+            conflicts_graph = unfixed_conflicts_graphs[i]
+            # Set progress evaluation
+            for original_net in original_networks:
+                # Finish the construction of all possible networks with conflicts networks
+                original_net = net2boolnet(original_net, original_graph, tags=['activators', 'inhibitors'])
+                nets = [item for sublist in list(conflicts_manager(original_net, conflicts_networks, conflicts_graph, tags))
+                        for item in sublist]
+                # Execute the validation of all possible networks
+                for net in nets:
+                    if net not in assessed_networks:
+                        primes = FileExchange.bnet2primes(net)
+                        stg = StateTransitionGraphs.primes2stg(primes, "synchronous")
+                        steady, cyclic = Attractors.compute_attractors_tarjan(stg)
+                        steadies = [
+                            [att for att in attractors if steady_att.startswith(att)] for steady_att in steady
+                        ]
+                        steadies = list(set([item for sublist in steadies for item in sublist]))
+                        condition = True if len(steadies) == len(attractors) else False
+                        # Assess whether the result is to be sent or not
+                        if condition:
+                            assessed_networks.append(net)  # TO BE IMPROVED
+                            yield {
+                                'network': net,
+                                'steady': steady,
+                                'cyclic': cyclic
+                            }
+            # Update progress
+            bar()
+    print('Networks extension completed')
 
 
 def third_validation(graph, initial_networks, attractors, simulations=20, max_iterations=2000):
