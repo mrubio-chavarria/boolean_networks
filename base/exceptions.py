@@ -1,6 +1,12 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+INDICATIONS:
+In this file they are defined several exceptions to take over certain special malfunctioning cases.
+"""
+
+
 class InputAlterationException(Exception):
     """
     DESCRIPTION:
