@@ -15,10 +15,7 @@ from utils.stp import stpn
 from PyBoolNet import Repository, StateTransitionGraphs, Attractors, FileExchange
 import itertools
 import random
-from utils.conflicts_theory import Pathway, Conflict, KMap, ConflictsManager
-from utils.hibrids import Result
-import progressbar
-import time
+from utils.conflicts_theory import Pathway, Conflict
 
 
 def get_level(tree, path, level):
@@ -611,6 +608,9 @@ def netValidator(initial_networks=None, initial_graph=None, original_networks=No
         def str_gen(n):
             for i in range(0, n):
                 yield '0'
+
+        # Generate the matrix with the priorities
+        blosum = blosum_generator(graph)
 
         # All possible variables combinations
         print('Initializing parameters and pathways')
