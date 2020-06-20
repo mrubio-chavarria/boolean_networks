@@ -23,10 +23,9 @@ def main():
     content = [[['D'], ['']], [['A'], ['']], [[''], ['A']], [['B'], ['C']]]
     initial_data = pd.DataFrame(data=content, index=index, columns=columns)
     attractors = ['0010', '1101']  # Introduce each one in alphabetical order
-    """
     # Generate the graph object
     simulations = 2
-    variants_limit = 300
+    variants_limit = 3
     max_local_iterations = 50
     max_global_iterations = 100
     filter_kernel = {'roles_sets': [[['I', 'I', 1, 1],
@@ -60,7 +59,7 @@ def main():
 
     # Filter by networks with coherent projection
     networks = netFilter(final_networks)
-
+    """
 
 if __name__ == '__main__':
     main()
