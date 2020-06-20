@@ -1,15 +1,11 @@
-import time
-import uuid
-import pytictoc
-import progressbar
+
 from functools import reduce
 from pytictoc import TicToc
 from alive_progress import alive_bar
-
-from utils.conflicts_theory import Pathway, KMap, ConflictsManager
-from utils.exceptions import InputAlterationException, NotValidNetworkException, ConvergenceException
-from utils.hibrids import Result
-from utils.ncbf import blosum_generator
+from graphs.conflicts_theory import Pathway, ConflictsManager
+from base.exceptions import InputAlterationException, ConvergenceException
+from base.hibrids import Result
+from base.ncbf import blosum_generator
 from PyBoolNet import StateTransitionGraphs, Attractors, FileExchange
 
 
@@ -43,9 +39,7 @@ class Validation:
         self.attractors = attractors
         self.space = self.get_space()
         # Obtain the results of the validation
-        self.results = None
-        self.filtered_results = None
-        self.execute_validation()
+        self.results = self.execute_validation()
 
     def get_space(self):
         """
@@ -81,14 +75,6 @@ class Validation:
                         yield Pathway(antecedent=el, consequent=self.nodes[i], activator=True, space=self.get_space())
                     else:
                         yield Pathway(antecedent=el, consequent=self.nodes[i], activator=False, space=self.get_space())
-
-    def get_results(self):
-        """
-        DESCRIPTION:
-        A method to return the results in a unique object.
-        :return: [dictionary] non filtered and filtered results.
-        """
-        return {'results': self.results, 'filtered_results': self.filtered_results}
 
     def third_validation(self, max_pathways=6400):
         """
@@ -240,6 +226,5 @@ class Validation:
             # Third method of validation
             self.results = list(self.third_validation())
         # Group results by similarity
-        grouped_results = self.group_results()
-        print()
+        return self.group_results()
 

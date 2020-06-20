@@ -7,7 +7,7 @@ inspired by Karnaugh Map.
 import itertools
 from copy import deepcopy
 
-from utils.utils import (
+from logic.utils import (
     Term,
     diff_terms,
     get_not_simplified_terms,

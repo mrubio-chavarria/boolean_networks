@@ -1,17 +1,11 @@
 import re
-import sys
-import itertools
 import pandas as pd
-import time
-
 from pytictoc import TicToc
-
-from utils.exceptions import InputAlterationException, NotValidAlgorithmException, ConvergenceException
-from utils.utils import Term
-from utils.Kmap import Minterms
+from base.exceptions import InputAlterationException, NotValidAlgorithmException, ConvergenceException
+from logic.utils import Term
+from logic.Kmap import Minterms
 import random
 import sympy
-from sympy import Symbol
 from sympy.logic import SOPform
 from uuid import uuid4
 

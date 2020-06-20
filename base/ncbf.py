@@ -4,21 +4,20 @@ INDICATIONS:
 In this file, they are given several utilities to the calculation of nested canalizing boolean functions
 (boolean_networks).
 """
-import sys
-from itertools import combinations, permutations, product, combinations_with_replacement
+from itertools import combinations, permutations, product
 from functools import reduce
 from operator import add
 from random import choice
 import pandas as pd
 import numpy as np
-from utils.stp import stpn
-from PyBoolNet import Repository, StateTransitionGraphs, Attractors, FileExchange
+from alive_progress import alive_bar
+from base.exceptions import InputAlterationException, ConvergenceException
+from PyBoolNet import StateTransitionGraphs, Attractors, FileExchange
 import itertools
 import random
-from utils.conflicts_theory import Pathway, Conflict, KMap, ConflictsManager
-from utils.hibrids import Result
+from graphs.conflicts_theory import Pathway, KMap, ConflictsManager
+from base.hibrids import Result
 import progressbar
-import time
 
 
 def get_level(tree, path, level):
@@ -520,249 +519,232 @@ def conflicts_manager(net, conflicts_networks, conflicts_graph, tags):
         yield networks_set
 
 
-def netValidator(initial_networks=None, initial_graph=None, original_networks=None, original_graph=None, attractors=None,
-                 unfixed_sets_conflicts_networks=None, unfixed_conflicts_graphs=None, fixed_conflicts_graph=None, tags=None):
+def netValidator(initial_networks=None, initial_graph=None, original_networks=None, original_graph=None, tags=None,
+                 unfixed_sets_conflicts_networks=None, unfixed_conflicts_graphs=None, attractors=None):
     """
     DESCRIPTION:
     Given a function and an attractor, it is returned whether the function meets the attractors condition or not.
-    :param networks: [list] NCBFs to be validated with the structure of Murrugarra 2013.
-    :param graph: [pandas dataframe] graph from which come the networks in the structure set in previous stages.
+    :param initial_networks: [list] with structures of the networks. Lists containing the set of steps which form the
+    path in the tree algorithm.
+    :param initial_graph: [pandas DataFrame] the representation of the original network.
+    :param tags: [list] labels for the columns with different roles for the positions in the columns of the data.
+    Example: activators and inhibitors.
+    :param original_networks: [list] structures devoted to the extension of the network. They incorporate the new nodes
+    but they only represent the expressions of the original nodes.
+    :param original_graph: [pandas DataFrame] the same concept of original networks but extrapolated to the graph. The
+    expressions of the original nodes with the new nodes.
+    :param attractors: [list] strings representing the steady states of the network which we are looking for.
+    :param unfixed_sets_conflicts_networks: [list] sets of paths, with different structures for the networks according
+    to each set of path. But these are partial structures, they only describe expressions for the new nodes.
+    :param unfixed_conflicts_graphs: [list] the same as before but for the graphs. All the possible graphs describing
+    only the new nodes. Different graphs, different set of paths with all possible combinations.
     :return: [list] networks that have passed the validation.
     """
     # Auxiliary functions
-    def first_validation(conflicts_networks, conflicts_graph, extended_networks):
-        for original_net in original_networks:
-            # Finish the construction of all possible networks with conflicts networks
-            original_net = net2boolnet(original_net, original_graph, tags=['activators', 'inhibitors'])
-            nets = [item for sublist in list(conflicts_manager(original_net, conflicts_networks, conflicts_graph, tags))
-                    for item in sublist]
-            # Execute the validation of all possible networks
-            for net in nets:
-                if net not in extended_networks:
-                    primes = FileExchange.bnet2primes(net)
-                    stg = StateTransitionGraphs.primes2stg(primes, "synchronous")
-                    steady, cyclic = Attractors.compute_attractors_tarjan(stg)
-                    steadies = [
-                        [att for att in attractors if steady_att.startswith(att)] for steady_att in steady
-                    ]
-                    steadies = list(set([item for sublist in steadies for item in sublist]))
-                    condition = True if len(steadies) == len(attractors) else False
-                    if condition:
-                        extended_networks.append(net)  # TO BE IMPROVED
-                        yield {
-                            'network': net,
-                            'steady': steady,
-                            'cyclic': cyclic
-                        }
-
-    def second_validation():
+    def first_validation(unfixed_sets_conflicts_networks, unfixed_conflicts_graphs, limit=None):
         """
         DESCRIPTION:
-        The version of the first validation but for conflicts with fixed structure. But this structure is given
-        previously, not discovered in the moment.
+        The function to extend the networks with the given conflicts sets.
+        :param unfixed_sets_conflicts_networks: [list] sets of paths, with different structures for the networks
+        according to each set of path. But these are partial structures, they only describe expressions for the new
+        nodes.
+        :param unfixed_conflicts_graphs: [list] the same as before but for the graphs. All the possible graphs
+        describing only the new nodes. Different graphs, different set of paths with all possible combinations.
+        :param limit: [int] number of networks to be extended.
+        :return: [dictionary] final network with its attractors.
         """
-
-        # Take the nodes
-        nodes = []
-        [nodes.extend([it for sl in list(fixed_conflicts_graph.loc[index, :]) for it in sl if it != '']) for index in
-        fixed_conflicts_graph.index]
-        nodes = list(set(nodes))
-
-        for network in initial_networks:
-            # Build the original network
-            network = net2boolnet(network, initial_graph, tags=['activators', 'inhibitors'])
-            # Take the expressions needed
-            expressions = dict([(node.split(', ')) for node in network.split('\n')])
-            # Make the conflicts expressions
-            for variable in fixed_conflicts_graph.index:
-                variables = fixed_conflicts_graph.loc[variable, 'expressions']
-                activated = fixed_conflicts_graph.loc[variable, 'activated']
-                inhibited = fixed_conflicts_graph.loc[variable, 'inhibited']
-                # Introduce the conflicts
-                for node in initial_graph.index:
-                    if node in activated:
-                        expressions[node] = expressions[node] + '|' + f'{"&".join(variables)}'
-                    elif node in inhibited:
-                        expressions[node] = f'!({"&".join(variables)})' + '&' + expressions[node]
-
-            network = '\n'.join([', '.join(item) for item in expressions.items()])
-            # Assess the new network
-            primes = FileExchange.bnet2primes(network)
-            stg = StateTransitionGraphs.primes2stg(primes, "synchronous")
-            steady, cyclic = Attractors.compute_attractors_tarjan(stg)
-            steadies = [
-                [att for att in attractors if steady_att.startswith(att)] for steady_att in steady
-            ]
-            steadies = list(set([item for sublist in steadies for item in sublist]))
-            condition = True if len(steadies) == len(attractors) else False
-            if condition:
-                yield {
-                    'network': network,
-                    'steady': steady,
-                    'cyclic': cyclic
-                }
-
-    def third_validation(graph):
-        """
-        DESCRIPTION:
-        The third mechanism ot treating the conflicts.
-        """
-        # Auxiliary functions
-        def str_gen(n):
-            for i in range(0, n):
-                yield '0'
-
-        # All possible variables combinations
-        print('Initializing parameters and pathways')
-        combinations = [bin(i).split('b')[1] if len(bin(i).split('b')[1]) == len(graph.index) else
-                        ''.join(str_gen(len(graph.index) - len(bin(i).split('b')[1]))) + bin(i).split('b')[1]
-                        for i in range(0, 2 ** len(graph.index))]
-        space = [{graph.index[i]: int(c[i]) for i in range(0, len(c))} for c in combinations]
-
-        # Generate the initial set of pathways
-        initial_pathways = []
-        with progressbar.ProgressBar(max_value=len(graph.index)) as bar:
-            for i in range(0, len(graph.index)):
-                node = graph.index[i]
-                [initial_pathways.append(Pathway(antecedent=act, consequent=node, activator=True, space=space))
-                 for act in graph['activators'][node] if act != '']
-                [initial_pathways.append(Pathway(antecedent=inh, consequent=node, activator=False, space=space))
-                 for inh in graph['inhibitors'][node] if inh != '']
-                bar.update(i)
-
-        # Set initial parameters of the similations
-        results = {'accepted': [], 'dismissed': []}
-        simulations = 20
-        max_iterations = 2000
-        max_pathways = 640
-
-        # Get all inputs
-        inputs = [el for el in graph.index if graph.loc[el, 'activators'] == [''] and
-                  graph.loc[el, 'inhibitors'] == ['']]
-
-        # Launch the simulations
-        print('Launching simulations')
-        with progressbar.ProgressBar(max_value=simulations) as bar:
-            for m in range(0, simulations):
-                # Generate the matrix with the priorities for the simulation
-                blosum = blosum_generator(graph)
-                net_counter = -1
-                for initial_network in initial_networks:
-                    net_counter += 1
-                    condition_result = True  # set the condition to append the result of the simulation
-                    pathways = initial_pathways[:]
-                    n_pathways = len(pathways)  # number of pathways
-                    # Generate the basis map
-                    base_map = KMap(initial_network, graph)
-                    # Control parameters
-                    i = 0
-                    iter_count = 0
-                    conflicts = []
-                    # Calculate
-                    try:
-                        while i < len(graph.index):
-                            # Get the pathways of the node
-                            node = graph.index[i]
-                            node_pathways = {'activators': [], 'inhibitors': []}
-                            [node_pathways['activators'].append(pathway) if pathway.activator
-                             else node_pathways['inhibitors'].append(pathway) for pathway in pathways
-                             if pathway.consequent == node]
-                            # Solve the conflicts
-                            pathways = list(filter(lambda x: x.consequent != node, pathways))
-                            manager = ConflictsManager(activators=node_pathways['activators'],
-                                                       inhibitors=node_pathways['inhibitors'],
-                                                       priority_matrix=blosum,
-                                                       network=initial_network,
-                                                       conflicts=conflicts,
-                                                       base_map=base_map,
-                                                       graph=graph,
-                                                       node=node)
-                            pathways.extend(manager.get_solution())
-                            pathways.sort(key=lambda x: x.consequent)
-                            # INPUT validation:
-                            # There cannot be any pathway with an input in the consequent
-                            if len(pathways) != len(list(filter(lambda x: x.consequent not in inputs, pathways))):
-                                raise ValueError
-                            # Filtering of equivalent pathways
-                            occurrences = []
-                            codes = []
-                            for p in range(0, len(pathways)):
-                                path1 = pathways[p]
-                                for q in range(0, len(pathways)):
-                                    path2 = pathways[q]
-                                    if path1.region_of_interest == path2.region_of_interest and\
-                                            path1.consequent == path2.consequent:
-                                        code = ''.join(path1.region_of_interest) + path1.consequent
-                                        occurrences += [(p, code)]
-                                        codes += [code] if code not in codes else []
-                            occurrences = [list(filter(lambda x: x[1] == code, occurrences))[0] for code in codes]
-                            pathways = [pathways[p[0]] for p in occurrences]
-                            # Validation
-                            if i == len(graph.index) - 1:
-                                iter_count += 1
-                                if iter_count >= max_iterations:
-                                    condition_result = False
-                                    break
-                                if len(pathways) != n_pathways:
-                                    i = 0
-                                    n_pathways = len(pathways)
-                                    continue
-                            i += 1
-                    except ValueError:
-                        # If the map of the INPUT is altered the simulation is not valid. Likewise, if we enter in a
-                        # cyclic resolution of the conflicts, the simulation is not valid.
-                        condition_result = False
-                    except IndexError:
-                        # The same situation of the INPUT, at the time of selecting destiny nodes.
-                        condition_result = False
-                    except RecursionError:
-                        # Another situation in which the error algorithm takes too many iterations.
-                        condition_result = False
-                    # Check the condition and add the new result
-                    if condition_result:
-                        # Apply all the pathways over the map
-                        base_map.modificate_maps(pathways)
-                        # Get the expression from the maps
-                        expressions = base_map.get_expressions()
-                        # Validation with the attractors
-                        primes = FileExchange.bnet2primes('\n'.join(expressions))
-                        stg = StateTransitionGraphs.primes2stg(primes, "synchronous")
-                        steady, cyclic = Attractors.compute_attractors_tarjan(stg)
-                        result = Result(network=initial_network,
-                                        pathways=pathways,
-                                        maps_set=base_map,
-                                        conflicts=conflicts,
-                                        simulation=m,
-                                        iterations=iter_count,
-                                        expressions=expressions,
-                                        attractors={'steady': steady, 'cyclic': cyclic})
-                        condition = all([True if att in steady else False for att in attractors])
-                        # Add the result
-                        if condition:
-                            results['accepted'].append(result)
-                        else:
-                            results['dismissed'].append(result)
-                bar.update(m)
-        print('Simulations completed')
-        # Filtering for equivalent results
-        codes = []
-        final_results = []
-        [(codes.append(result.code), final_results.append(result)) for result in results['accepted']
-         if result.code not in codes]
-        return final_results
+        print('Extending networks')
+        num_sets_conflicts_networks = len(unfixed_sets_conflicts_networks) if limit is None else limit
+        assessed_networks = []
+        with alive_bar(len(original_networks)*num_sets_conflicts_networks) as bar:
+            for i in range(0, num_sets_conflicts_networks):
+                conflicts_networks = unfixed_sets_conflicts_networks[i]
+                conflicts_graph = unfixed_conflicts_graphs[i]
+                # Set progress evaluation
+                for original_net in original_networks:
+                    # Finish the construction of all possible networks with conflicts networks
+                    original_net = net2boolnet(original_net, original_graph, tags=['activators', 'inhibitors'])
+                    nets = [item for sublist in list(conflicts_manager(original_net, conflicts_networks, conflicts_graph, tags))
+                            for item in sublist]
+                    # Execute the validation of all possible networks
+                    for net in nets:
+                        if net not in assessed_networks:
+                            primes = FileExchange.bnet2primes(net)
+                            stg = StateTransitionGraphs.primes2stg(primes, "synchronous")
+                            steady, cyclic = Attractors.compute_attractors_tarjan(stg)
+                            steadies = [
+                                [att for att in attractors if steady_att.startswith(att)] for steady_att in steady
+                            ]
+                            steadies = list(set([item for sublist in steadies for item in sublist]))
+                            condition = True if len(steadies) == len(attractors) else False
+                            # Assess whether the result is to be sent or not
+                            if condition:
+                                assessed_networks.append(net)  # TO BE IMPROVED
+                                yield {
+                                    'network': net,
+                                    'steady': steady,
+                                    'cyclic': cyclic
+                                }
+                # Update progress
+                bar()
+        print('Networks extension completed')
 
     # Extend the original networks and execute the validation
-    num_sets_conflicts_networks = len(unfixed_sets_conflicts_networks)
-    assessed_networks = []
-    extended_ncbf_networks = []
-    for i in range(0, num_sets_conflicts_networks):
-        extended_ncbf_networks.extend(list(first_validation(unfixed_sets_conflicts_networks[i],
-                                                            unfixed_conflicts_graphs[i], assessed_networks)))
+    extended_ncbf_networks = list(first_validation(unfixed_conflicts_graphs=unfixed_conflicts_graphs,
+                                                   unfixed_sets_conflicts_networks=unfixed_sets_conflicts_networks))
+    return extended_ncbf_networks
 
-    # Extend the original networks with the errors with fixed structure
-    final_networks = first_validation(initial_graph)
 
-    return final_networks
+def third_validation(graph, initial_networks, attractors, simulations=20, max_iterations=2000):
+    """
+    DESCRIPTION:
+    The third mechanism ot treating the conflicts.
+    :param graph: [pandas DataFrame] the original representation of the network.
+    :param initial_networks: [list] with structures of the networks. Lists containing the set of steps which form the
+    path in the tree algorithm.
+    :param simulations: [int] number of analysis of the same network that are to be performed.
+    :param max_iterations: [int] maximum number of iterations that the recursive algorithm is allowed to perform. The
+    objective is to avoid non-convergent solutions.
+    :param attractors: [list] strings representing the steady states of the network which we are looking for.
+    :return: [list] results which the attractors condition.
+    """
+    # Auxiliary functions
+    def str_gen(n):
+        for i in range(0, n):
+            yield '0'
+
+    # All possible variables combinations
+    print('Initializing parameters and pathways')
+    combinations = [bin(i).split('b')[1] if len(bin(i).split('b')[1]) == len(graph.index) else
+                    ''.join(str_gen(len(graph.index) - len(bin(i).split('b')[1]))) + bin(i).split('b')[1]
+                    for i in range(0, 2 ** len(graph.index))]
+    space = [{graph.index[i]: int(c[i]) for i in range(0, len(c))} for c in combinations]
+
+    # Generate the initial set of pathways
+    initial_pathways = []
+    with progressbar.ProgressBar(max_value=len(graph.index)) as bar:
+        for i in range(0, len(graph.index)):
+            node = graph.index[i]
+            [initial_pathways.append(Pathway(antecedent=act, consequent=node, activator=True, space=space))
+             for act in graph['activators'][node] if act != '']
+            [initial_pathways.append(Pathway(antecedent=inh, consequent=node, activator=False, space=space))
+             for inh in graph['inhibitors'][node] if inh != '']
+            bar.update(i)
+
+    # Set initial parameters of the similations
+    results = {'accepted': [], 'dismissed': []}
+
+    # Get all inputs
+    inputs = [el for el in graph.index if graph.loc[el, 'activators'] == [''] and
+              graph.loc[el, 'inhibitors'] == ['']]
+
+    # Launch the simulations
+    print('Launching simulations')
+    with progressbar.ProgressBar(max_value=simulations) as bar:
+        for m in range(0, simulations):
+            # Generate the matrix with the priorities for the simulation
+            blosum = blosum_generator(graph)
+            net_counter = -1
+            for initial_network in initial_networks:
+                net_counter += 1
+                condition_result = True  # set the condition to append the result of the simulation
+                pathways = initial_pathways[:]
+                n_pathways = len(pathways)  # number of pathways
+                # Generate the basis map
+                base_map = KMap(initial_network, graph)
+                # Control parameters
+                i = 0
+                iter_count = 0
+                conflicts = []
+                # Calculate
+                try:
+                    while i < len(graph.index):
+                        # Get the pathways of the node
+                        node = graph.index[i]
+                        node_pathways = {'activators': [], 'inhibitors': []}
+                        [node_pathways['activators'].append(pathway) if pathway.activator
+                         else node_pathways['inhibitors'].append(pathway) for pathway in pathways
+                         if pathway.consequent == node]
+                        # Solve the conflicts
+                        pathways = list(filter(lambda x: x.consequent != node, pathways))
+                        manager = ConflictsManager(activators=node_pathways['activators'],
+                                                   inhibitors=node_pathways['inhibitors'],
+                                                   priority_matrix=blosum,
+                                                   network=initial_network,
+                                                   conflicts=conflicts,
+                                                   base_map=base_map,
+                                                   graph=graph,
+                                                   node=node)
+                        pathways.extend(manager.get_solution())
+                        pathways.sort(key=lambda x: x.consequent)
+                        # INPUT validation:
+                        # There cannot be any pathway with an input in the consequent
+                        if len(pathways) != len(list(filter(lambda x: x.consequent not in inputs, pathways))):
+                            raise ValueError
+                        # Filtering of equivalent pathways
+                        occurrences = []
+                        codes = []
+                        for p in range(0, len(pathways)):
+                            path1 = pathways[p]
+                            for q in range(0, len(pathways)):
+                                path2 = pathways[q]
+                                if path1.region_of_interest == path2.region_of_interest and\
+                                        path1.consequent == path2.consequent:
+                                    code = ''.join(path1.region_of_interest) + path1.consequent
+                                    occurrences += [(p, code)]
+                                    codes += [code] if code not in codes else []
+                        occurrences = [list(filter(lambda x: x[1] == code, occurrences))[0] for code in codes]
+                        pathways = [pathways[p[0]] for p in occurrences]
+                        # Validation
+                        if i == len(graph.index) - 1:
+                            iter_count += 1
+                            if iter_count >= max_iterations:
+                                condition_result = False
+                                break
+                            if len(pathways) != n_pathways:
+                                i = 0
+                                n_pathways = len(pathways)
+                                continue
+                        i += 1
+                except InputAlterationException:
+                    # If the map of the INPUT is altered the simulation is not valid.
+                    condition_result = False
+                except ConvergenceException:
+                    # If the resolution does not converge
+                    condition_result = False
+                # Check the condition and add the new result
+                if condition_result:
+                    # Apply all the pathways over the map
+                    base_map.modificate_maps(pathways)
+                    # Get the expression from the maps
+                    expressions = base_map.get_expressions()
+                    # Validation with the attractors
+                    primes = FileExchange.bnet2primes('\n'.join(expressions))
+                    stg = StateTransitionGraphs.primes2stg(primes, "synchronous")
+                    steady, cyclic = Attractors.compute_attractors_tarjan(stg)
+                    result = Result(network=initial_network,
+                                    pathways=pathways,
+                                    maps_set=base_map,
+                                    conflicts=conflicts,
+                                    simulation=m,
+                                    iterations=iter_count,
+                                    variant=None,
+                                    expressions=expressions,
+                                    attractors={'steady': steady, 'cyclic': cyclic})
+                    condition = all([True if att in steady else False for att in attractors])
+                    # Add the result
+                    if condition:
+                        results['accepted'].append(result)
+                    else:
+                        results['dismissed'].append(result)
+            bar.update(m)
+    print('Simulations completed')
+    # Filtering for equivalent results
+    codes = []
+    final_results = []
+    [(codes.append(result.code), final_results.append(result)) for result in results['accepted']
+     if result.code not in codes]
+    return final_results
 
 
 def blosum_generator(graph):

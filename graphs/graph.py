@@ -4,9 +4,9 @@ import pandas as pd
 import uuid
 import itertools
 from alive_progress import alive_bar
-from utils.conflicts_theory import KMap, Pathway
-from utils.ncbf import ncbfCalc, networksCalc
-from utils.validation import Validation
+from graphs.conflicts_theory import KMap, Pathway
+from base.ncbf import ncbfCalc, networksCalc
+from base.validation import Validation
 
 
 class Graph:
@@ -60,8 +60,7 @@ class Graph:
                                      max_global_iterations=max_global_iterations,
                                      max_local_iterations=max_local_iterations)
         # Obtain the results of the validation
-        self.results = self.validation.get_results()
-        print()
+        self.results = self.validation.results
 
     def __str__(self):
         """
@@ -253,7 +252,6 @@ class Graph:
                         # The copy is needed to avoid the recursive application over all pathways
                         yield Network(structure=network, variant=copy.deepcopy(variant))
                     bar()
-
 
 class Node:
     """

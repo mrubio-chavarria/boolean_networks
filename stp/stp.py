@@ -5,6 +5,7 @@ INDICATIONS:
 In this file, they are given several utilities to construct boolean networks based on the Semi-Tensor product. It is all
 based in the structure stated in Murrugarra 2013.
 """
+
 import re
 import numpy as np
 from numpy import matlib as mb
