@@ -39,7 +39,7 @@ class LM:
                 [p, q] = np.shape(args[0])
                 k = np.where(np.transpose(args[0]).flatten() == 1)
                 k = (np.array(np.where(np.transpose(args[0]).flatten() == 1)) + 1) % p
-                self.v = (k + (k == 0)*p - 1).flatten()
+                self.v = (k + (k == 0)*p - 1)
                 self.n = p
             else:
                 raise AttributeError('They are valid logic matrices only.')
@@ -79,9 +79,9 @@ class LM:
             result.v = self.v[other.v]
             result.n = self.n
         elif n % p == 0:
-            k = n/p
-            r = np.reshape(self.v, k, p)
-            result.v = r[:, other.v]
+            k = int(n/p)
+            r = np.transpose(np.reshape(self.v, [k, p]))
+            result.v = np.transpose(r[:, other.v]).reshape([1, r[:, other.v].size])
             result.n = self.n
         elif p % n == 0:
             if n == 1:
@@ -89,13 +89,28 @@ class LM:
                 result.n = p*m
             else:
                 k = p / n
-                x = np.array([math.floor(it) for it in (other.v)/k]) + 1
+                x = np.array([math.floor(it) for it in (other.v/k).flatten()])
                 t = (other.v + 1) % k
                 y = t + (t == 0) * k
-                result.v = (self.v[x-1]) * k + y - 1
+                result.v = self.v[0, x] * k + y - 1
                 result.n = int(m * p / n)
         else:
             raise ValueError('Dimnensions must match multiple dimension condition')
+        return result
+
+    def __eq__(self, other):
+        """
+        DECRIPTION:
+        A method to overload the == operator according to the MATLAB code.
+        :return: [boolean] result of the comparison.
+        """
+        if isinstance(other, LM):
+            if len(self.v) != len(other.v):
+                raise ValueError('The column numbers must agree')
+            result = self.v == other.v
+        else:
+            # To be IMPROVED
+            raise ValueError('The two instances are to be of LM class')
         return result
 
     def get_shape(self):
@@ -104,7 +119,7 @@ class LM:
         A method similar to the numpy shape, adapted to this object.
         :return: [tuple] dimensions of the matrix.
         """
-        return self.n, len(self.v)
+        return self.n, len(self.v.flatten())
 
 
 
