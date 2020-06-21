@@ -16,7 +16,7 @@ class InputAlterationException(Exception):
     def __init__(self):
         """
         DESCRIPTION:
-        Builder of the class
+        Constructor of the class
         """
         super().__init__('Inputs cannot be altered')
 
@@ -30,7 +30,7 @@ class NotValidNetworkException(Exception):
     def __init__(self):
         """
         DESCRIPTION:
-        Builder of the class
+        Constructor of the class
         """
         super().__init__('Not valid network found')
 
@@ -45,7 +45,7 @@ class ConvergenceException(Exception):
     def __init__(self):
         """
         DESCRIPTION:
-        Builder of the class
+        Constructor of the class
         """
         super().__init__('Not solution found')
 
@@ -60,7 +60,7 @@ class NotValidAlgorithmException(Exception):
     def __init__(self):
         """
         DESCRIPTION:
-        Builder of the class
+        Constructor of the class
         """
         super().__init__('Invalid algorithm code introduced')
 

@@ -26,7 +26,7 @@ class ConflictsManager:
                  max_iterations=100, algorithm='I'):
         """
         DESCRIPTION:
-        Builder of the class.
+        Constructor of the class.
         :param activators: [list] pathways to be considered as activators.
         :param inhibitors: [list] pathways to be considered as inhibitors.
         :param priority_matrix: [pandas DataFrame] matrix with the priority to solve the conflicts.
@@ -232,7 +232,7 @@ class Pathway:
                  canalized_value=None):
         """
         DESCRIPTION:
-        Builder of the object.
+        Constructor of the object.
         :param antecedent: [string] left side of the equation which describes the pathway. Condition.
         :param consequent: [string] right side of the equation which describes the pathway. Result of the condition.
         :param activator: [boolean] Variable to store if the relation among sides if activatory or inhibitory.
@@ -376,7 +376,7 @@ class Conflict:
     def __init__(self, first_pathway, second_pathway, priority_matrix, psi, graph):
         """
         DESCRIPTION:
-        Builder of the object.
+        Constructor of the object.
         :param first_pathway: [pathway] The first pathway interfering in the conflict.
         :param second_pathway: [pathway] The second pathway interfering in the conflict.
         :param priority_matrix: [pandas DataFrame] Matrix with the scores to solve the conflict.
@@ -554,7 +554,7 @@ class KMap:
     def __init__(self, network, graph, roles_set=None, inputs=None, space=None):
         """
         DESCRIPTION:
-        Builder of the object.
+        Constructor of the object.
         :param network: [list] the structure in which the graph nodes are distributed.
         :param graph: [pandas DataFrame] description of the whole set of pathways from which the network comes.
         :param roles_set: [list] the set of roles (canalizing and canalized value) for every node in the expressions.

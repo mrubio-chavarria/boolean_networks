@@ -15,7 +15,7 @@ class Result:
                  accepted=False):
         """
         DESCRIPTION:
-        Builder to the Result class.
+        Constructor to the Result class.
         :param network: [list] the structured network employed.
         :param pathways: [list] objects pathway, the result of the simulation.
         :param conflicts: [list] objects conflict, the record of the simulation.

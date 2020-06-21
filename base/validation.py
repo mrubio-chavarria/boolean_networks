@@ -21,7 +21,7 @@ class Validation:
                  attractors=None, simulations=20):
         """
         DESCRIPTION:
-        Builder of the object Validation.
+        Constructor of the object Validation.
         :param kind: [string] code indicating the kind of validation to be performed.
         :param networks: [list] networks to be validated.
         :param nodes: [list] names of the nodes of the network.

@@ -23,7 +23,7 @@ class Graph:
                  variants_limit=None, max_global_iterations=20, max_local_iterations=20):
         """
         DESCRIPTION:
-        Builder of the object graph.
+        Constructor of the object graph.
         :param initial_data: [pandas DataFrame] data representing the initial data upon which the graph is built.
         :param attractors: [list] strings containing the attractors for the validation.
         :param filter_kernel: [dictionary] all the data to perform the filtration.
@@ -266,7 +266,7 @@ class Node:
     def __init__(self, name):
         """
         DESCRIPTION:
-        Builder of the class.
+        Constructor of the class.
         :param name: [string] name of the node.
         """
         self.id = f'nd{uuid.uuid1()}'
@@ -330,7 +330,7 @@ class Variant:
     def __init__(self, roles, initial_data, inputs, space):
         """
         DESCRIPTION:
-        Builder of the class.
+        Constructor of the class.
         :param roles: [list] representation of the role given to every node.
         :param initial_data: [pandas DataFrame] initial representation of the graph.
         :param inputs: [list] names of the nodes that act as inputs.
@@ -438,7 +438,7 @@ class Network:
     def __init__(self, structure, variant):
         """
         DESCRIPTION:
-        Builder method of the object.
+        Constructor method of the object.
         :param structure: [list] structure of the network to be taken by the algorithm.
         :param variant: [Variant] object with the variant of the graph
         """
@@ -512,7 +512,7 @@ class Filter:
     def __init__(self, roles_sets=None, structures=None):
         """
         DESCRIPTION:
-        Builder of the class.
+        Constructor of the class.
         :param roles_sets: [list] with the roles sets allowed.
         :param structures: [list] with the structures allowed.
         """
