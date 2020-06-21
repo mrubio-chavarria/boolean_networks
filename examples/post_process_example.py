@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-DESCRIPTION:
+INDICATIONS:
 In this script it is automatized the inference of the example network described in the dissertation.
 """
 
@@ -13,8 +13,6 @@ import pandas as pd
 def main():
     # ------------------------------------------------------------------------------------------------------------------
     # Extension of the example network
-    # ------------------------------------------------------------------------------------------------------------------
-    # Functional extension with the conflicts of the network
     # ------------------------------------------------------------------------------------------------------------------
     # Original graph
     index = ['A', 'B', 'C', 'D']

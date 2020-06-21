@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-DESCRIPTION: 
+INDICATIONS:
 
     In this script it is reproduced and automatized the inference of the epithelial-to-mesenchymal transition (EMT). The
 biological information has  been taken from:
@@ -29,8 +29,8 @@ def main():
     content = [[['D'], ['']], [['A'], ['']], [[''], ['A']], [['B'], ['C']]]
     initial_data = pd.DataFrame(data=content, index=index, columns=columns)
     attractors = ['0010', '1101']  # Introduce each one in alphabetical order
-    # ------------------------------------------------------------------------------------------------------------------
-    # Generate the graph object
+
+    # Inference parameters
     simulations = 1
     variants_limit = 1
     max_local_iterations = 50
@@ -49,6 +49,8 @@ def main():
                      'structures': [[['SZ'], 'INPUT', ['I', 'ST'], ['SZ'], ['D', 'SZ']]]
                      }
     imposed_roles_sets = None
+
+    # Model inference
     graph = Graph(initial_data=initial_data, attractors=attractors, filter_kernel=None,
                   imposed_roles_sets=imposed_roles_sets, simulations=simulations, variants_limit=variants_limit,
                   max_global_iterations=max_global_iterations, max_local_iterations=max_local_iterations)
