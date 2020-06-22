@@ -6,8 +6,8 @@ INDICATIONS:
 In this script are encoded in Python all the classes described in MATLAB in Daizhan Cheng's STP toolbox. Available in
 http://lsc.amss.ac.cn/~dcheng/
 """
-import copy
 
+import copy
 import numpy as np
 import math
 
@@ -48,7 +48,7 @@ class LM:
                 raise ValueError('They are only allowed numpy arrays')
             if not isinstance(args[1], int):
                 raise ValueError('They are only allowed integers')
-            self.v = args[0].astype(int)
+            self.v = np.reshape(args[0].astype(int), [1, args[0].size])
             self.n = int(args[1])
 
     def __str__(self):
@@ -68,8 +68,8 @@ class LM:
         # Check
         if not isinstance(other, LM):
             other = LM(other)
-        self.v = self.v.astype(int)
-        other.v = other.v.astype(int)
+        self.v = np.reshape(self.v.astype(int), [1, self.v.size])
+        other.v = np.reshape(other.v.astype(int), [1, other.v.size])
         # Parameters
         [m, n] = self.get_shape()
         [p, q] = other.get_shape()
@@ -78,7 +78,10 @@ class LM:
         if n == 0 or q == 0:
             raise ValueError('Empty LM object')
         if n == p:
-            result.v = self.v[0, other.v]
+            try:
+                result.v = self.v[0, other.v]
+            except IndexError:
+                print()
             result.n = self.n
         elif n % p == 0:
             k = int(n/p)
@@ -234,7 +237,7 @@ class STP:
         if n == p:
             c = STP(self.c*other.c)
         else:
-            t = lcm(n, p)
+            t = np.lcm(n, p)
             c = STP(kron(self.c, np.eye(int(t/n)))*kron(other.c, np.eye(int(t/p))))
         return c
 
@@ -373,6 +376,8 @@ def kron(a, b):
     elif not isinstance(b, LM):
         raise ValueError('For Kronecker product, matrices are to be numpy array or LM.')
     result = LM()
+    a.v = a.v.reshape([1, a.v.size])
+    b.v = b.v.reshape([1, b.v.size])
     # Obtain dimensions
     [m, n] = a.get_shape()
     [p, q] = b.get_shape()
@@ -380,33 +385,13 @@ def kron(a, b):
     r = a.v*p
     r = np.ones([q, 1])*r
     t = np.transpose(b.v + 1)
-    g = t * np.ones([1, n])
+    try:
+        g = t * np.ones([1, n])
+    except:
+        print()
     r = r + g
     result.v = np.transpose(r).reshape((1, r.size)) - 1
     result.n = m*p
     return result
 
 
-def lcm(x, y):
-    """
-    DESCRIPTION:
-    A function to compute the least common multiple among two different numbers. Adapted from:
-    https://www.javatpoint.com/python-find-lcm
-    :param x: [int] first number of the search.
-    :param y: [int] second number of the search.
-    :return: [int] least common multiple of x and y.
-    """
-    # Check
-    if not (isinstance(x, int) and isinstance(y, int)):
-        raise ValueError('In lcm both arguments are to be integers.')
-    # Algorithm
-    if x > y:
-        greater = x
-    else:
-        greater = y
-    while True:
-        if (greater % x == 0) and (greater % y == 0):
-            result = greater
-            break
-        greater += 1
-    return result
