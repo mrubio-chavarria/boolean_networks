@@ -52,6 +52,27 @@ def stpn(matrices):
     return load[-1]
 
 
+def lmd(k=None):
+    """
+    DESCRIPTION:
+    A function to generate disjunction matrices of the class LM.
+    :param k: [int] to set the k-valued logic.
+    :return: [LM] disjunction matrix.
+    """
+    # Check
+    k = 2 if k is None else k
+    # Algorithm
+    result = LM()
+    result.n = k
+    a = range(1, k+1)
+    p = np.repeat(a, repeats=k, axis=0)
+    q = np.tile(a, reps=k)
+    b = p <= q
+    result.v = np.multiply(p, b) + np.multiply(q, 1 - b) - 1
+    result.v = np.reshape(result.v, [1, result.v.size])
+    return result
+
+
 def lmc(k=None):
     """
     DESCRIPTION:
@@ -69,6 +90,7 @@ def lmc(k=None):
     q = np.tile(a, reps=k)
     b = (p >= q).astype(int)
     m.v = np.multiply(p, b) + np.multiply(q, 1 - b) - 1
+    m.v = np.reshape(m.v, [1, m.v.size])
     return m
 
 
@@ -104,6 +126,7 @@ def lwij(*args):
     i = np.repeat(range(1, m+1), repeats=n, axis=0)
     j = np.tile(range(1, n+1), reps=m)
     w.v = i + (j-1)*m - 1
+    w.v = np.reshape(w.v, [1, w.v.size])
     return w
 
 

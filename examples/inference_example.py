@@ -31,8 +31,8 @@ def main():
     attractors = ['0010', '1101']  # Introduce each one in alphabetical order
 
     # Inference parameters
-    simulations = 1
-    variants_limit = 1
+    simulations = 20
+    variants_limit = None
     max_local_iterations = 50
     max_global_iterations = 100
     filter_kernel = {'roles_sets': [[['I', 'I', 1, 1],

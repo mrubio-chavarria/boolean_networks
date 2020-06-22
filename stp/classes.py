@@ -48,7 +48,7 @@ class LM:
                 raise ValueError('They are only allowed numpy arrays')
             if not isinstance(args[1], int):
                 raise ValueError('They are only allowed integers')
-            self.v = np.reshape(args[0].astype(int), [1, args[0].size])
+            self.v = args[0].astype(int)
             self.n = int(args[1])
 
     def __str__(self):
@@ -376,8 +376,10 @@ def kron(a, b):
     elif not isinstance(b, LM):
         raise ValueError('For Kronecker product, matrices are to be numpy array or LM.')
     result = LM()
+    """
     a.v = a.v.reshape([1, a.v.size])
     b.v = b.v.reshape([1, b.v.size])
+    """
     # Obtain dimensions
     [m, n] = a.get_shape()
     [p, q] = b.get_shape()
@@ -385,10 +387,7 @@ def kron(a, b):
     r = a.v*p
     r = np.ones([q, 1])*r
     t = np.transpose(b.v + 1)
-    try:
-        g = t * np.ones([1, n])
-    except:
-        print()
+    g = t * np.ones([1, n])
     r = r + g
     result.v = np.transpose(r).reshape((1, r.size)) - 1
     result.n = m*p
