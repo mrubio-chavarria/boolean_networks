@@ -9,6 +9,10 @@ from base.exceptions import InputAlterationException, ConvergenceException
 from base.hibrids import Result
 from base.ncbf import blosum_generator
 from PyBoolNet import StateTransitionGraphs, Attractors, FileExchange
+import numpy as np
+
+from stp.algorithms import l_gen
+from stp.classes import LM
 
 
 class Validation:
@@ -17,7 +21,7 @@ class Validation:
     An object to standardize the different kinds of validation gathered in in ncbf.py.
     """
 
-    def __init__(self, networks, nodes, inputs, kind='III', max_global_iterations=20, max_local_iterations=20,
+    def __init__(self, networks, nodes, inputs, kind='Tarjan', max_global_iterations=20, max_local_iterations=20,
                  attractors=None, simulations=20):
         """
         DESCRIPTION:
@@ -83,6 +87,7 @@ class Validation:
         DESCRIPTION:
         The mechanism of validation to obtain the corrected maps with all the generated pathways according to the given,
         initial, map.
+        :param method: [string] validation method for the attractors.
         :param max_pathways: [int] parameter to set the maximum number of pathways.
         """
         # Launch the simulations
@@ -163,7 +168,6 @@ class Validation:
                         # Apply all the pathways over the map
                         network.map.modificate_maps(pathways)
                         # Get the expression from the maps
-                        t = TicToc()
                         expressions = list(network.map.get_expressions())
                         # Validation with the attractors
                         primes = FileExchange.bnet2primes('\n'.join(expressions))
@@ -213,20 +217,10 @@ class Validation:
     def execute_validation(self):
         """
         DESCRIPTION:
-        A method to perform the validation according to the different validation methods.
+        A method to perform the validation according to the different validation methods (Tarjan o STP).
         :return: [list] the results of the validation.
         """
-
-        # Select between the different methods of validation
-        if self.type == 'I':
-            # First method of validation
-            self.results = []
-        elif self.type == 'II':
-            # Second method of validation
-            self.results = []
-        if self.type == 'III':
-            # Third method of validation
-            self.results = list(self.third_validation())
+        self.results = list(self.third_validation())
         # Group results by similarity
         return self.group_results()
 

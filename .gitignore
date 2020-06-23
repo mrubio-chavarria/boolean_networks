@@ -13,3 +13,5 @@ networks_final.txt
 utils/kmaps/__pycache__/
 /records.txt
 /codes.txt
+base/__pycache__/
+stp/__pycache__/

@@ -8,7 +8,11 @@ http://lsc.amss.ac.cn/~dcheng/
 """
 
 import re
-from stp.utils import lmc, lmn, lmr
+from math import prod
+
+from pytictoc import TicToc
+
+from stp.utils import lmc, lmn, lmr, lmd
 from stp.classes import kron
 from stp.utils import stpn, lwij, leye
 
@@ -247,37 +251,28 @@ def matrix_calc(expr, first_signal, second_signal, op_values, chunk_values, sym)
     """
     DESCRIPTION:
     This function is the true eval within matrix eval.
+    :param expr: [string] the expression to be assessed.
+    :param first_signal: [string] mark for the position of values corresponding to functions.
+    :param second_signal: [string] mark for the position of values corresponding to parenthesis.
+    :param op_values: [list] matrices, the result of the functions.
+    :param chunk_values: [list] matrices, the result of the parenthesis.
+    :param sym: [dictionary] reference to values of precalculated matrices.
     """
-    r_pos = [i for i in range(0, len(expr)) if expr[i] == '-']
-    s_pos = [i for i in range(0, len(expr)) if expr[i] == '+']
-    sr_list = re.split('\+|\-', expr)
-    results = []
-    count = 0
-    op_count = 0
-    for cluster in sr_list:
-        cluster = cluster.split('*')
-        matrices = []
-        for m in cluster:
-            if m != second_signal and m != first_signal:
-                matrices.append(sym[m])
-            elif m == second_signal:
-                matrices.append(chunk_values[count])
-                count += 1
+    terms = []
+    for term in expr.split(r'+'):
+        factors = []
+        for factor in term.split('*'):
+            if factor == first_signal:
+                factors.append(op_values.pop(0))
+            elif factor == second_signal:
+                factors.append(chunk_values.pop(0))
             else:
-                matrices.append(op_values[op_count])
-                op_count += 1
-
-        results.append(stpn(matrices))
-    result = results[0]
-    for i in range(1, len(results)):
-        m_r = min(r_pos) if len(r_pos) > 0 else max(s_pos) + 1
-        m_s = min(s_pos) if len(s_pos) > 0 else max(r_pos) + 1
-        if 0 < m_s < m_r:
-            result = kron(result, results[i])
-            s_pos.pop(s_pos.index(m_s))
-        elif m_s > m_r > 0:
-            raise ValueError
-    return result
+                factors.append(sym[factor])
+        if len(factors) == 1:
+            terms.append(factors[0])
+        else:
+            terms.append(prod(factors[1::], start=factors[0]))
+    return sum(terms[1::], start=terms[0]) if len(terms) > 1 else terms[0]
 
 
 def key2load(expr, positions, first_signal, second_signal):
@@ -320,97 +315,122 @@ def matrix_eval(expr, variables):
     MC = lmc()
     # Power reducing matrix
     MR = lmr()
+    # Disjunction matrix
+    MD = lmd()
 
     # Dictionary
-    sym = {'MN': MN, 'MC': MC, 'MR': MR}
+    sym = {'MN': MN, 'MC': MC, 'MR': MR, 'MD': MD}
     # Tags
     tags = ['leye', 'lwij']
-
     # Catch the parenthesis by the keyword LOAD. Process the string
     loads_positions = detect_load(expr)
-
     # Filtering of function parenthesis
     operations = parenthesis_filter(loads_positions, expr, tags)
-
     # Change the parenthesis by the keyword OP
     first_signal = '$OP$'
     expr, op_values = key2op(expr, operations, first_signal)
-
     # Recalculate the positions
     loads_positions = detect_load(expr)
-
     # Filtering of embedded parenthesis
     positions = embedded_filter(loads_positions)
-
     # Make new expression with $LOAD$
     second_signal = '$LOAD$'
     expr, chunks = key2load(expr, positions, first_signal, second_signal)
-
     # Obtain the value of the parenthesis
     chunk_values = []
     for chunk in chunks:
         chunk_values.append(matrix_eval(chunk, variables))
-
     # Perform the operation
     result = matrix_calc(expr, first_signal, second_signal, op_values, chunk_values, sym)
     return result
 
 
-def l_gen(net, graph):
+def l_gen(net, graph, expressions=True):
     """
     DESCRIPTION:
     A function to generate the L matrix from a given graph.
-    :param net: [list] our representation of a network according with the formulation given in Murrugarra 2013.
+    :param net: [list] our representation of a network according with the formulation given in Murrugarra 2013 or with a
+    set of fixed expressions.
     :param graph: [pandas DataFrame] the whole representation of the graph.
+    :param expressions: [boolean] a flag to indicate if the matrix is to be built from a set of expressions or from the
+    structure of a NCBF.
     :return: [numpy array] the L matrix of the graph.
-
-    Dictionary:def swapVarsByOrder(vars, f, logic):
     """
+    # Auxiliary function
+    def aux_fun(net):
+        for expr in net:
+            expr = ''.join(r.findall(expr)).split(',')
+            if expr[1] != '0' and expr[1] != '1':
+                terms = list(aux_funII(expr[1].split('|')))
+                expr = ' '.join(['MD ' + terms[i] if i != len(terms) - 1 else terms[i] for i in range(0, len(terms))])
+            elif expr[1] == '0':
+                expr = f'MC {graph.index[0]} MN {graph.index[0]}'
+            elif expr[1] == '0':
+                expr = f'MD {graph.index[0]} MN {graph.index[0]}'
+            yield expr
 
-    # Iterate through the net
-    for i in range(0, len(net)):
-        # Set the structure of an INPUT node
-        if net[i] == 'INPUT':
-            net[i] = f'{graph.index[i]}'
-            continue
-        # Iterate through the layers of a node
-        load = ''
-        steps = range(len(net[i])-1, -1, -1)
-        m_step = min(steps)
-        first_letter = list(net[i][m_step])[0]
-        for j in steps:
-            layer = list(reversed(net[i][j]))
-            # Assess if we are in the outer node or in the deepest
-            ms = 'MN'
-            if j == m_step and first_letter in graph.iloc[i]['activators']:
-                header = ms
-                if len(steps) != 1:
-                    header += ' ' + 'MC'
-            elif j == m_step and first_letter in graph.iloc[i]['inhibitors']:
-                header = ''
-                if len(steps) != 1:
-                    header += 'MC'
-            else:
-                if j == max(steps):
+    def aux_funII(terms):
+        for term in terms:
+            if term in list(graph.index):
+                yield term
+                continue
+            # Probably this can be done faster without regex
+            term = term if term[0] not in ['(', ')'] else term[1:-1]
+            chunk = re.subn('[^\&]\w?', '', term)[1]
+            header = '' if chunk == 1 and '!' in term else 'MC '
+            term = re.sub('[\&](?=.*?\&)', '$MC$', term)
+            term = re.sub('[$\&]', ' ', term.replace('!', 'MN$'))
+            yield header + term
+
+    # Choose a way to build the string
+    r = re.compile(r'[^ ].*?')
+    if expressions:
+        net = list(aux_fun(net))
+    else:
+        # Iterate through the net
+        for i in range(0, len(net)):
+            # Set the structure of an INPUT node
+            if net[i] == 'INPUT':
+                net[i] = f'{graph.index[i]}'
+                continue
+            # Iterate through the layers of a node
+            load = ''
+            steps = range(len(net[i])-1, -1, -1)
+            m_step = min(steps)
+            first_letter = list(net[i][m_step])[0]
+            for j in steps:
+                layer = list(reversed(net[i][j]))
+                # Assess if we are in the outer node or in the deepest
+                ms = 'MN'
+                if j == m_step and first_letter in graph.iloc[i]['activators']:
                     header = ms
+                    if len(steps) != 1:
+                        header += ' ' + 'MC'
+                elif j == m_step and first_letter in graph.iloc[i]['inhibitors']:
+                    header = ''
+                    if len(steps) != 1:
+                        header += 'MC'
                 else:
-                    header = ms + ' ' + 'MC'
-            # Calculate the whole load
-            if len(layer) == 1:
-                level = 'MN' + ' ' + layer[0]
-            else:
-                level = 'MN' + ' ' + layer[0]
-                for letter in layer[1::]:
-                    level = 'MC' + ' ' + 'MN' + ' ' + letter + ' ' + level
-            # Add inner load
-            level = level + ' ' + load
-            # Add the header
-            load = header + ' ' + level
-            pass
-        node = load[0:len(load)-1].split(' ')
-        if '' in node:
-            node.pop(node.index(''))
-        net[i] = ' '.join(node)
+                    if j == max(steps):
+                        header = ms
+                    else:
+                        header = ms + ' ' + 'MC'
+                # Calculate the whole load
+                if len(layer) == 1:
+                    level = 'MN' + ' ' + layer[0]
+                else:
+                    level = 'MN' + ' ' + layer[0]
+                    for letter in layer[1::]:
+                        level = 'MC' + ' ' + 'MN' + ' ' + letter + ' ' + level
+                # Add inner load
+                level = level + ' ' + load
+                # Add the header
+                load = header + ' ' + level
+                pass
+            node = load[0:len(load)-1].split(' ')
+            if '' in node:
+                node.pop(node.index(''))
+            net[i] = ' '.join(node)
     # Create the matrix from the string
     options = list(graph.index)
     expr, variables = stdform(net, options)

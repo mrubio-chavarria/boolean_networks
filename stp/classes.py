@@ -10,6 +10,7 @@ http://lsc.amss.ac.cn/~dcheng/
 import copy
 import numpy as np
 import math
+import sys
 
 
 class LM:
@@ -78,15 +79,13 @@ class LM:
         if n == 0 or q == 0:
             raise ValueError('Empty LM object')
         if n == p:
-            try:
-                result.v = self.v[0, other.v]
-            except IndexError:
-                print()
+            result.v = self.v[0, other.v]
             result.n = self.n
         elif n % p == 0:
             k = int(n/p)
-            r = np.transpose(np.reshape(self.v, [k, p]))
-            result.v = np.transpose(r[:, other.v]).reshape([1, r[:, other.v].size])
+            g = np.reshape(self.v, [k, p], order='F')
+            r = g[:, other.v]
+            result.v = np.reshape(r, [1, r.size], order='F')
             result.n = self.n
         elif p % n == 0:
             if n == 1:
@@ -376,19 +375,13 @@ def kron(a, b):
     elif not isinstance(b, LM):
         raise ValueError('For Kronecker product, matrices are to be numpy array or LM.')
     result = LM()
-    """
-    a.v = a.v.reshape([1, a.v.size])
-    b.v = b.v.reshape([1, b.v.size])
-    """
     # Obtain dimensions
     [m, n] = a.get_shape()
     [p, q] = b.get_shape()
     # Perform algorithm
     r = a.v*p
     r = np.ones([q, 1])*r
-    t = np.transpose(b.v + 1)
-    g = t * np.ones([1, n])
-    r = r + g
+    r = r + np.repeat(np.transpose(b.v + 1), repeats=n, axis=1)
     result.v = np.transpose(r).reshape((1, r.size)) - 1
     result.n = m*p
     return result

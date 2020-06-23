@@ -103,7 +103,7 @@ def lmn(k=None):
     """
     # Check
     k = 2 if k is None else k
-    return LM(np.array(range(k, 0, -1)) - 1, k)
+    return LM(np.array([range(k, 0, -1)]) - 1, k)
 
 
 def lwij(*args):
