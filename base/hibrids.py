@@ -3,6 +3,7 @@
 
 import json
 import sys
+from uuid import uuid1
 
 
 class Result:
@@ -63,9 +64,24 @@ class Result:
         in a file.
         :return: [dictionary] representation of the result in JSON format.
         """
-        return json.dumps({'network': str(self.network),
-                           'pathways': str([str(pathway) for pathway in self.pathways]),
-                           'accepted': str(self.accepted)})
+        data = {'network': str(self.network),
+                'pathways': '\n                  '.join([str(pathway) for pathway in self.pathways]),
+                'conflicts': '\n                   '.join([str(conflict) for conflict in self.conflicts]),
+                'attractors': '\n                    ' +
+                              'Steady: ' + ' '.join(self.attractors['steady']) +
+                              '\n                    ' +
+                              'Cyclic: ' + ' '.join([str(att) for att in self.attractors['cyclic']]),
+                'accepted': str(self.accepted)}
+        text = f"""
+        * Network:
+        ID: {uuid1()}
+        Structure: {data['network']}
+        Pathways: {data['pathways']}
+        Conflicts: {data['conflicts']}
+        Attractors: {data['attractors']}
+        Accepted: {data['accepted']}
+        """
+        return text
 
     def set_pathways(self, pathways):
         """

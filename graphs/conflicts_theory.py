@@ -390,7 +390,7 @@ class Conflict:
         self.graph = graph
 
     def __str__(self):
-        return f'Conflict:\n {self.first_pathway}\n vs\n {self.second_pathway}'
+        return f'{self.first_pathway} vs {self.second_pathway}'
 
     def set_priority(self, priority_matrix):
         """

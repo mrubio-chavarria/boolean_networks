@@ -26,7 +26,7 @@ class LM:
         They can be introduced a numpy logical matrix, or a numpy vector and an integer with the columns of the identity
         matrix.
         :param matrix: [numpy array] matrix filled with 1 or 0 to be converted in LM object.
-        :parm v: [numpy array] vector with the columns in the identity matrix.
+        :param v: [numpy array] vector with the columns in the identity matrix.
         :param n: [integer] number indicating the dimensions of the identity matrix.
         """
         # Check for LM objects
