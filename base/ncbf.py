@@ -281,6 +281,7 @@ def ncbfCalc(data, tags):
     paths = pd.Series(data=paths, index=data.index)
     return paths
 
+
 def conflict_ncbfCalc(variables, tag):
     """
     DESCRIPTION:

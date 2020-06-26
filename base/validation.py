@@ -103,6 +103,9 @@ class Validation:
                     i = 0
                     iter_count = 0
                     conflicts = []
+                    # Extra number of rounds to avoid unforeseen conflicts
+                    p = 0
+                    p_limit = 5
                     # Calculate
                     try:
                         while i < len(network.variant.data.index):
@@ -155,6 +158,11 @@ class Validation:
                                     n_pathways = len(pathways)
                                     continue
                             i += 1
+                            # Redundant condition for unforeseen conflicts
+                            if i >= len(network.variant.data.index) and p <= p_limit:
+                                i = 0
+                                p += 1
+
                     except InputAlterationException:
                         # If the map of the INPUT is altered the simulation is not valid.
                         condition_result = False
@@ -166,22 +174,24 @@ class Validation:
                     # Check the condition and add the new result
                     if condition_result:
                         # Apply all the pathways over the map
-                        network.map.modificate_maps(pathways)
+                        network.original_map.modificate_maps(pathways)
                         # Get the expression from the maps
-                        expressions = list(network.map.get_expressions())
+                        expressions = list(network.original_map.get_expressions())
                         # Validation with the attractors
                         primes = FileExchange.bnet2primes('\n'.join(expressions))
                         stg = StateTransitionGraphs.primes2stg(primes, "synchronous")
                         steady, cyclic = Attractors.compute_attractors_tarjan(stg)
                         result = Result(network=network.structure,
                                         pathways=pathways,
-                                        maps_set=network.map,
+                                        maps_set=network.original_map,
                                         conflicts=conflicts,
                                         simulation=m,
                                         iterations=iter_count,
                                         expressions=expressions,
                                         attractors={'steady': steady, 'cyclic': cyclic},
-                                        variant=network.variant)
+                                        variant=network.variant,
+                                        priority_matrix=priority_matrix,
+                                        roles_set=network.variant.roles)
                         # Set if the result has been successful and return it
                         result.accepted = all([True if att in steady else False for att in self.attractors])
                         yield result
@@ -193,23 +203,37 @@ class Validation:
         attractors.
         :return: [dictionary] grouped results.
         """
-        # Group by cyclic and steady attractors presence
+        # Group non-cyclic attractors
         non_cyclic_results = [result for result in self.results if len(result.attractors['cyclic']) == 0]
         # With the same number of steady states and non cyclic
-        steadies = [result for result in non_cyclic_results if len(result.attractors['steady']) == len(self.attractors)]
+        same_number = [result for result in non_cyclic_results if len(result.attractors['steady']) == len(self.attractors)]
         # Group by number of steady attractors of the list
-        one_of_all = [result for result in steadies
-                      if len([att for att in self.attractors if att in result.attractors]) == 1]
-        two_of_all = [result for result in steadies
-                      if len([att for att in self.attractors if att in result.attractors]) == 2]
-        three_of_all = [result for result in steadies if result.accepted]
+        at_least_one_of_all = []
+        for result in non_cyclic_results:
+            if any([True if att in result.attractors['steady'] else False for att in self.attractors]):
+                at_least_one_of_all.append(result)
+        sn_at_least_one_of_all = []
+        for result in same_number:
+            if any([True if att in result.attractors['steady'] else False for att in self.attractors]):
+                sn_at_least_one_of_all.append(result)
+        at_least_two_of_all = []
+        for result in at_least_one_of_all:
+            if len([att for att in self.attractors if att in result.attractors['steady']]) > 1:
+                at_least_two_of_all.append(result)
+        sn_at_least_two_of_all = []
+        for result in sn_at_least_one_of_all:
+            if len([att for att in self.attractors if att in result.attractors['steady']]) > 1:
+                sn_at_least_two_of_all.append(result)
+        three_of_all = [result for result in at_least_two_of_all if result.accepted]
         # Organize the response
         grouped_results = {
             'total_results': self.results,
             'non_cyclic_results': non_cyclic_results,
-            'same_number': steadies,
-            'one_of_all': one_of_all,
-            'two_of_all': two_of_all,
+            'same_number': same_number,
+            'one_of_all': at_least_one_of_all,
+            'same_number_with_at_least_one_of_all': sn_at_least_one_of_all,
+            'two_of_all': at_least_two_of_all,
+            'same_number_with_at_least_two_of_all': sn_at_least_two_of_all,
             'three_of_all': three_of_all
         }
         return grouped_results

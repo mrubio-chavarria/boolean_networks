@@ -57,8 +57,6 @@ class ConflictsManager:
                                               inhibitors=self.inhibitors)
         if self.algorithm == 'I':
             self.launch_first_algorithm()
-        elif self.algorithm == 'II':
-            self.launch_second_algorithm()
         else:
             raise NotValidAlgorithmException
 
@@ -182,16 +180,6 @@ class ConflictsManager:
         self.following_group = following_group
         self.extra_pathways = extra_pathways
         self.registry = registry
-
-
-    def launch_second_algorithm(self):
-        """
-        DESCRIPTION:
-        The second method that we devised. It holds the recurrent algorithm to solve the conflicts, provided a set of
-        pathways.
-        """
-        return 3
-
 
     def get_solution(self):
         """

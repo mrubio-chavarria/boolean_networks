@@ -31,26 +31,31 @@ def main():
     attractors = ['00101', '11011', '11010']  # Introduce each one in alphabetical order
 
     # Inference parameters
-    simulations = 20
+    simulations = 900
     variants_limit = None
     max_local_iterations = 50
     max_global_iterations = 50
-    filter_kernel = {'roles_sets': [[['A', 'A', 1, 1],
-                                     ['B', 'A', 0, 0],
-                                     ['B', 'B', 0, 1],
-                                     ['B', 'C', 0, 1],
-                                     ['C', 'B', 1, 0],
-                                     ['C', 'D', 1, 0],
-                                     ['D', 'E', 0, 1],
-                                     ['D', 'B', 0, 0],
-                                     ['D', 'D', 0, 0],
-                                     ['E', 'B', 0, 1],
-                                     ['E', 'D', 0, 1]]],
-                     'structures': [[['BD'], 'INPUT', ['A', 'BC'], ['BD'], ['E', 'BD']]]}
+    roles_sets = [[['A', 'A', 1, 1],
+                   ['B', 'A', 0, 0],
+                   ['B', 'B', 0, 1],
+                   ['B', 'C', 0, 1],
+                   ['C', 'B', 1, 0],
+                   ['C', 'D', 1, 0],
+                   ['D', 'E', 0, 1],
+                   ['D', 'B', 0, 0],
+                   ['D', 'D', 0, 0],
+                   ['E', 'B', 0, 1],
+                   ['E', 'D', 0, 1]]]
+    structures = [['INPUT', ['ABC'], ['BD'], ['D', 'B', 'E'], ['B', 'D']],
+                  ['INPUT', ['AB', 'C'], ['BD'], ['B', 'DE'], ['BD']],
+                  ['INPUT', ['ABC'], ['BD'], ['D', 'B', 'E'], ['D', 'B']],
+                  ['INPUT', ['A', 'C', 'B'], ['B', 'D'], ['B', 'D', 'E'], ['BD']]]
+    filter_kernel = {'roles_sets': None,
+                     'structures': structures}
     imposed_roles_sets = None
 
     # Model inference
-    graph = Graph(initial_data=initial_data, attractors=attractors, filter_kernel=None,
+    graph = Graph(initial_data=initial_data, attractors=attractors, filter_kernel=filter_kernel,
                   imposed_roles_sets=imposed_roles_sets, simulations=simulations, variants_limit=variants_limit,
                   max_global_iterations=max_global_iterations, max_local_iterations=max_local_iterations)
 
@@ -74,9 +79,17 @@ def main():
     file.write('\n--------------------------------------------------------------------------------------------------\n')
     [file.write('\n' + result.get_serialized_data()) for result in graph.results['one_of_all']]
     file.write('\n--------------------------------------------------------------------------------------------------\n')
+    file.write('\nSame number of attractors and one attractor of all\n')
+    file.write('\n--------------------------------------------------------------------------------------------------\n')
+    [file.write('\n' + result.get_serialized_data()) for result in graph.results['same_number_with_at_least_one_of_all']]
+    file.write('\n--------------------------------------------------------------------------------------------------\n')
     file.write('\nTwo attractors of all\n')
     file.write('\n--------------------------------------------------------------------------------------------------\n')
     [file.write('\n' + result.get_serialized_data()) for result in graph.results['two_of_all']]
+    file.write('\n--------------------------------------------------------------------------------------------------\n')
+    file.write('\nSame number of attractors and two attractors of all\n')
+    file.write('\n--------------------------------------------------------------------------------------------------\n')
+    [file.write('\n' + result.get_serialized_data()) for result in graph.results['same_number_with_at_least_two_of_all']]
     file.write('\n--------------------------------------------------------------------------------------------------\n')
     file.write('\nThree attractors of all\n')
     file.write('\n--------------------------------------------------------------------------------------------------\n')

@@ -445,6 +445,7 @@ class Network:
         self.structure = structure
         self.variant = variant
         self.map = self.get_map()
+        self.original_map = copy.deepcopy(self.map)
         self.code = self.get_code()
         self.pathways = self.get_pathways()
         self.set_canalizing_values()
