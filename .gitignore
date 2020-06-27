@@ -16,3 +16,6 @@ utils/kmaps/__pycache__/
 base/__pycache__/
 stp/__pycache__/
 /results.txt
+examples/test.py
+graphs/__pycache__/
+logic/__pycache__/
