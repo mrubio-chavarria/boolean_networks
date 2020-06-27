@@ -225,6 +225,10 @@ class Validation:
             if len([att for att in self.attractors if att in result.attractors['steady']]) > 1:
                 sn_at_least_two_of_all.append(result)
         three_of_all = [result for result in at_least_two_of_all if result.accepted]
+        sn_three_of_all = []
+        for result in three_of_all:
+            if result in same_number:
+                sn_three_of_all.append(result)
         # Organize the response
         grouped_results = {
             'total_results': self.results,
@@ -234,7 +238,8 @@ class Validation:
             'same_number_with_at_least_one_of_all': sn_at_least_one_of_all,
             'two_of_all': at_least_two_of_all,
             'same_number_with_at_least_two_of_all': sn_at_least_two_of_all,
-            'three_of_all': three_of_all
+            'three_of_all': three_of_all,
+            'same_number_and_three_of_all': sn_three_of_all
         }
         return grouped_results
 

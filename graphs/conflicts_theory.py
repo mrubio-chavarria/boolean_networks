@@ -231,6 +231,7 @@ class Pathway:
         """
         self.id = str(uuid4())
         self.code = ''
+        self.map = None
         self.antecedent = ''.join(sorted(antecedent))
         self.canalizing_value = canalizing_value
         self.canalized_value = canalized_value
@@ -238,7 +239,8 @@ class Pathway:
         self.activator = activator
         self.expression = self.set_antecedent_expression_from_graph(antecedent) if expression is None else expression
         if space is not None:
-            self.set_map(space)
+            self.space = space
+            self.set_map()
 
     def __str__(self):
         return self.antecedent + ' --> ' + self.consequent + ' Activator: ' + str(self.activator) + ' Expression: '\
@@ -298,17 +300,16 @@ class Pathway:
         expression = '&'.join(list(original))
         return expression
 
-    def set_map(self, variables_set):
+    def set_map(self):
         """
         DESCRIPTION:
         A method that, given a set of variables calculates its Karnaugh map in an abstract manner.
-        :param variables_set: [list] list of dicts with the variables combinations to be tested.
+        :param update: [boolean] a flag to indicate if we are in the setting of the final maps.
         :return: [dict] combinations and their result to the pathway.
         :return: [list] strings drawing the to which the pathway has been designed.
         :return: [string] code to indicate the type to which the pathway belongs.
         """
-        self.map = {''.join([str(var) for var in vs_set.values()]): self.eval_expression(vs_set)
-                    for vs_set in variables_set}
+        self.map = {''.join([str(var) for var in vs_set.values()]): self.eval_expression(vs_set) for vs_set in self.space}
         self.region_of_interest = list(sorted([key for key in self.map.keys() if self.map[key]]))
         self.code = f'${"".join(self.region_of_interest)}:{self.consequent}$'
 
@@ -629,7 +630,7 @@ class KMap:
         :param pathways: [list] pathways to be implemented over the map. Without any conflict. Directly.
         """
         def aux_fun(pathway):
-            value = pathway.consequent
+            pathway.set_map()
             self.maps.loc[pathway.consequent, list(pathway.region_of_interest)] = pathway.activator
         list(map(aux_fun, pathways))
 
