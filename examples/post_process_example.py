@@ -45,7 +45,7 @@ def main():
                            original_networks=original_networks,
                            original_graph=original_data,
                            attractors=attractors)
-
+    results = list(results)
 
 if __name__ == '__main__':
     main()

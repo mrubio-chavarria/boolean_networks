@@ -31,7 +31,7 @@ def main():
     attractors = ['00101', '11011', '11010']  # Introduce each one in alphabetical order
 
     # Inference parameters
-    simulations = 1
+    simulations = 10
     variants_limit = None
     max_local_iterations = 50
     max_global_iterations = 50
@@ -55,7 +55,7 @@ def main():
     imposed_roles_sets = None
 
     # Model inference
-    graph = Graph(initial_data=initial_data, attractors=attractors, filter_kernel=filter_kernel,
+    graph = Graph(initial_data=initial_data, attractors=attractors, filter_kernel=None,
                   imposed_roles_sets=imposed_roles_sets, simulations=simulations, variants_limit=variants_limit,
                   max_global_iterations=max_global_iterations, max_local_iterations=max_local_iterations)
 

@@ -620,6 +620,7 @@ def post_process(unfixed_sets_conflicts_networks, unfixed_conflicts_graphs, orig
     print('Extending networks')
     num_sets_conflicts_networks = len(unfixed_sets_conflicts_networks) if limit is None else limit
     assessed_networks = []
+    tags = ['activators', 'inhibitors']
     with alive_bar(len(original_networks)*num_sets_conflicts_networks) as bar:
         for i in range(0, num_sets_conflicts_networks):
             conflicts_networks = unfixed_sets_conflicts_networks[i]
@@ -627,7 +628,7 @@ def post_process(unfixed_sets_conflicts_networks, unfixed_conflicts_graphs, orig
             # Set progress evaluation
             for original_net in original_networks:
                 # Finish the construction of all possible networks with conflicts networks
-                original_net = net2boolnet(original_net, original_graph, tags=['activators', 'inhibitors'])
+                original_net = net2boolnet(original_net, original_graph, tags=tags)
                 nets = [item for sublist in list(conflicts_manager(original_net, conflicts_networks, conflicts_graph, tags))
                         for item in sublist]
                 # Execute the validation of all possible networks
