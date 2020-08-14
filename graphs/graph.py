@@ -6,10 +6,10 @@ from functools import reduce
 import pandas as pd
 import uuid
 import itertools
-from alive_progress import alive_bar
 from graphs.conflicts_theory import KMap, Pathway
 from base.ncbf import ncbfCalc, networksCalc
 from base.validation import Validation
+import progressbar
 
 
 class Graph:
@@ -56,14 +56,17 @@ class Graph:
         print('Variants generation completed')
         print('Searching for networks')
         self.networks = self.get_networks()
-        print('Networks search completed')
-        print('Launch the validation of the networks')
+        print('\nNetworks search completed')
+        print('Validating the networks')
         self.validation = Validation(networks=self.networks, nodes=[node.name for node in self.get_nodes()],
                                      inputs=self.inputs, attractors=self.attractors, simulations=simulations,
                                      max_global_iterations=max_global_iterations,
                                      max_local_iterations=max_local_iterations)
+        print('Networks validation completed')
+        print('Writing the results into files')
         # Obtain the results of the validation
         self.results = self.validation.results
+        print('Networks writing completed')
 
     def __str__(self):
         """
@@ -236,25 +239,27 @@ class Graph:
         inputs_names = self.get_inputs()
         roles_combinations = self.get_roles_combinations()
         roles_combinations = roles_combinations[0:limit] if limit is not None else roles_combinations
-        with alive_bar(len(roles_combinations)) as bar:
+        with progressbar.ProgressBar(max_value=len(roles_combinations)) as bar:
             for i in range(0, len(roles_combinations)):
                 if self.filter.clean(roles_set=roles_combinations[i]):
                     yield Variant(roles=roles_combinations[i], initial_data=self.initial_data, inputs=inputs_names,
                                   space=self.get_space())
-                bar()
+                bar.update(i)
 
     def networks_generator(self):
         """
         DESCRIPTION:
         A method to generate all the networks associated with the variants in the graph.
         """
-        with alive_bar() as bar:
+        with progressbar.ProgressBar() as bar:
             for variant in self.get_variants():
-                for network in variant.get_networks():
-                    if self.filter.clean(structure=network):
+                networks = variant.get_networks()
+                for i in range(0, len(networks)):
+                    if self.filter.clean(structure=networks[i]):
                         # The copy is needed to avoid the recursive application over all pathways
-                        yield Network(structure=network, variant=copy.deepcopy(variant))
-                    bar()
+                        yield Network(structure=networks[i], variant=copy.deepcopy(variant))
+                    bar.update(i)
+
 
 class Node:
     """

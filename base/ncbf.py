@@ -13,7 +13,6 @@ from operator import add
 from random import choice
 import pandas as pd
 import numpy as np
-from alive_progress import alive_bar
 from base.exceptions import InputAlterationException, ConvergenceException
 from PyBoolNet import StateTransitionGraphs, Attractors, FileExchange
 import itertools
@@ -560,7 +559,7 @@ def netValidator(initial_networks=None, initial_graph=None, original_networks=No
         print('Extending networks')
         num_sets_conflicts_networks = len(unfixed_sets_conflicts_networks) if limit is None else limit
         assessed_networks = []
-        with alive_bar(len(original_networks)*num_sets_conflicts_networks) as bar:
+        with progressbar.ProgressBar(max_value=len(original_networks)*num_sets_conflicts_networks) as bar:
             for i in range(0, num_sets_conflicts_networks):
                 conflicts_networks = unfixed_sets_conflicts_networks[i]
                 conflicts_graph = unfixed_conflicts_graphs[i]
@@ -590,7 +589,7 @@ def netValidator(initial_networks=None, initial_graph=None, original_networks=No
                                     'cyclic': cyclic
                                 }
                 # Update progress
-                bar()
+                bar.update(i)
         print('Networks extension completed')
 
     # Extend the original networks and execute the validation
@@ -621,7 +620,7 @@ def post_process(unfixed_sets_conflicts_networks, unfixed_conflicts_graphs, orig
     num_sets_conflicts_networks = len(unfixed_sets_conflicts_networks) if limit is None else limit
     assessed_networks = []
     tags = ['activators', 'inhibitors']
-    with alive_bar(len(original_networks)*num_sets_conflicts_networks) as bar:
+    with progressbar.ProgressBar(max_value=len(original_networks)*num_sets_conflicts_networks) as bar:
         for i in range(0, num_sets_conflicts_networks):
             conflicts_networks = unfixed_sets_conflicts_networks[i]
             conflicts_graph = unfixed_conflicts_graphs[i]
@@ -651,7 +650,7 @@ def post_process(unfixed_sets_conflicts_networks, unfixed_conflicts_graphs, orig
                                 'cyclic': cyclic
                             }
             # Update progress
-            bar()
+            bar.update(i)
     print('Networks extension completed')
 
 
@@ -852,6 +851,5 @@ def netFilter(networks):
                 yield net
     nodes = ['E', 'F']
     networks = list(simple_projection(nets=networks, nodes=nodes))
-    print()
 
 

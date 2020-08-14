@@ -26,12 +26,12 @@ def main():
     # Introduce the data
     index = ['A', 'B', 'C', 'D', 'E']
     columns = ['activators', 'inhibitors']
-    content = [[[''], ['']], [['A'], ['B', 'C']], [[''], ['B', 'D']], [['B', 'D'], ['E']], [[''], ['B', 'D']]]
+    content = [[[''], ['']], [[''], ['']], [['A', 'E'], ['B']], [['A'], ['']], [['A', 'D'], ['B']]]
     initial_data = pd.DataFrame(data=content, index=index, columns=columns)
-    attractors = ['00101', '11011', '11010']  # Introduce each one in alphabetical order
+    attractors = ['00000', '01000', '11000', '10111']  # Introduce each one in alphabetical order
 
     # Inference parameters
-    simulations = 10
+    simulations = 450
     variants_limit = None
     max_local_iterations = 50
     max_global_iterations = 50
@@ -108,6 +108,17 @@ def main():
     file.write('\nSame number and three attractors of all\n')
     file.write('\n--------------------------------------------------------------------------------------------------\n')
     [file.write('\n' + result.get_serialized_data()) for result in graph.results['same_number_and_three_of_all']]
+    file = open('results_four.txt', 'w')
+    file.write('\n--------------------------------------------------------------------------------------------------\n')
+    file.write('\nFour attractors of all\n')
+    file.write('\n--------------------------------------------------------------------------------------------------\n')
+    [file.write('\n' + result.get_serialized_data()) for result in graph.results['four_of_all']]
+    file.close()
+    file = open('results_same_four.txt', 'w')
+    file.write('\n--------------------------------------------------------------------------------------------------\n')
+    file.write('\nSame number and four attractors of all\n')
+    file.write('\n--------------------------------------------------------------------------------------------------\n')
+    [file.write('\n' + result.get_serialized_data()) for result in graph.results['same_number_and_four_of_all']]
     file.close()
 
 
