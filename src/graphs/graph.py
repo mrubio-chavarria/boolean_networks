@@ -56,7 +56,7 @@ class Graph:
         print('Variants generation completed')
         print('Searching for networks')
         self.networks = self.get_networks()
-        print('\nNetworks search completed')
+        print(f'\nNetworks search completed. \nTotal networks obtained: {len(self.networks)}')
         print('Validating the networks')
         self.validation = Validation(networks=self.networks, nodes=[node.name for node in self.get_nodes()],
                                      inputs=self.inputs, attractors=self.attractors, simulations=simulations,
