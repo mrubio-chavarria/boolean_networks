@@ -4,6 +4,7 @@ utils/__pycache__/
 venv/
 
 .idea/
+.vscode/
 l_matrix.txt
 PyBoolNet-2.2.8_linux64.tar.gz
 PyBoolNet-2.2.8_manual.pdf
@@ -19,3 +20,4 @@ stp/__pycache__/
 examples/test.py
 graphs/__pycache__/
 logic/__pycache__/
+src/examples/inference_example.py
