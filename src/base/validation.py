@@ -11,6 +11,16 @@ from base.ncbf import blosum_generator
 from PyBoolNet import StateTransitionGraphs, Attractors, FileExchange
 import multiprocessing as mp
 import tqdm
+from math import ceil
+import numpy as np
+import time
+
+
+# Wrappers
+def validation_wrapper(function):
+    def wrapper(*args):
+        args[2].extend(list(function(self=args[0], iterations=args[1])))
+    return wrapper
 
 
 class Validation:
@@ -80,119 +90,121 @@ class Validation:
                     else:
                         yield Pathway(antecedent=el, consequent=self.nodes[i], activator=False, space=self.get_space())
 
-    def validation(self, iteration):
+    @validation_wrapper
+    def validation(self, iterations):
         """
         DESCRIPTION:
         A method introduced to multiprocess the amount of validation to be performed.
-        :param iteration: [tuple] with the number of simulations and the network object.
+        :param iteration: [list] with the tuples, iterations, of simulations and the network object.
         :return: [Result] the result of the network creation and assessment. All the information.
         """
-        m = iteration[0]
-        network = iteration[1]
-        # iterations_count = iteration_bar[0]
-        # bar = iteration_bar[1][1]
-        # Generate the priority matrix
-        priority_matrix = blosum_generator(network.variant.data)
-        condition_result = True  # set the condition to append the result of the simulation
-        pathways = network.pathways[:]
-        n_pathways = len(pathways)  # number of pathways
-        # Control parameters
-        i = 0
-        iter_count = 0
-        conflicts = []
-        # Extra number of rounds to avoid unforeseen conflicts
-        p = 0
-        p_limit = 5
-        # Calculate
-        try:
-            while i < len(network.variant.data.index):
-                # Get the pathways of the node
-                node = network.variant.data.index[i]
-                node_pathways = {'activators': [], 'inhibitors': []}
-                [node_pathways['activators'].append(pathway) if pathway.activator
-                 else node_pathways['inhibitors'].append(pathway) for pathway in pathways
-                 if pathway.consequent == node]
-                # Solve the conflicts
-                pathways = list(filter(lambda x: x.consequent != node, pathways))
-                manager = ConflictsManager(activators=node_pathways['activators'],
-                                           inhibitors=node_pathways['inhibitors'],
-                                           priority_matrix=priority_matrix,
-                                           network=network.structure,
-                                           conflicts=conflicts,
-                                           base_map=network.map,
-                                           graph=network.variant.data,
-                                           algorithm='I',
-                                           max_iterations=self.max_local_iterations,
-                                           node=node)
-                pathways.extend(manager.get_solution())
-                pathways.sort(key=lambda x: x.consequent)
-                # INPUT validation:
-                # There cannot be any pathway with an input in the consequent
-                if len(pathways) != len(list(filter(lambda x: x.consequent not in self.inputs, pathways))):
-                    raise InputAlterationException
-                # Filtering of equivalent pathways
-                occurrences = []
-                codes = []
-                for p in range(0, len(pathways)):
-                    path1 = pathways[p]
-                    for q in range(0, len(pathways)):
-                        path2 = pathways[q]
-                        if path1.region_of_interest == path2.region_of_interest and \
-                                path1.consequent == path2.consequent:
-                            code = ''.join(path1.region_of_interest) + path1.consequent
-                            occurrences += [(p, code)]
-                            codes += [code] if code not in codes else []
-                occurrences = [list(filter(lambda x: x[1] == code, occurrences))[0] for code in codes]
-                pathways = [pathways[p[0]] for p in occurrences]
-                # Validation
-                if i == len(network.variant.data.index) - 1:
-                    iter_count += 1
-                    if iter_count >= self.max_global_iterations:
-                        condition_result = False
-                        break
-                    if len(pathways) != n_pathways:
+        for iteration in iterations:
+            m = iteration[0]
+            network = iteration[1]
+            # iterations_count = iteration_bar[0]
+            # bar = iteration_bar[1][1]
+            # Generate the priority matrix
+            priority_matrix = blosum_generator(network.variant.data)
+            condition_result = True  # set the condition to append the result of the simulation
+            pathways = network.pathways[:]
+            n_pathways = len(pathways)  # number of pathways
+            # Control parameters
+            i = 0
+            iter_count = 0
+            conflicts = []
+            # Extra number of rounds to avoid unforeseen conflicts
+            p = 0
+            p_limit = 5
+            # Calculate
+            try:
+                while i < len(network.variant.data.index):
+                    # Get the pathways of the node
+                    node = network.variant.data.index[i]
+                    node_pathways = {'activators': [], 'inhibitors': []}
+                    [node_pathways['activators'].append(pathway) if pathway.activator
+                        else node_pathways['inhibitors'].append(pathway) for pathway in pathways
+                        if pathway.consequent == node]
+                    # Solve the conflicts
+                    pathways = list(filter(lambda x: x.consequent != node, pathways))
+                    manager = ConflictsManager(activators=node_pathways['activators'],
+                                                inhibitors=node_pathways['inhibitors'],
+                                                priority_matrix=priority_matrix,
+                                                network=network.structure,
+                                                conflicts=conflicts,
+                                                base_map=network.map,
+                                                graph=network.variant.data,
+                                                algorithm='I',
+                                                max_iterations=self.max_local_iterations,
+                                                node=node)
+                    pathways.extend(manager.get_solution())
+                    pathways.sort(key=lambda x: x.consequent)
+                    # INPUT validation:
+                    # There cannot be any pathway with an input in the consequent
+                    if len(pathways) != len(list(filter(lambda x: x.consequent not in self.inputs, pathways))):
+                        raise InputAlterationException
+                    # Filtering of equivalent pathways
+                    occurrences = []
+                    codes = []
+                    for p in range(0, len(pathways)):
+                        path1 = pathways[p]
+                        for q in range(0, len(pathways)):
+                            path2 = pathways[q]
+                            if path1.region_of_interest == path2.region_of_interest and \
+                                    path1.consequent == path2.consequent:
+                                code = ''.join(path1.region_of_interest) + path1.consequent
+                                occurrences += [(p, code)]
+                                codes += [code] if code not in codes else []
+                    occurrences = [list(filter(lambda x: x[1] == code, occurrences))[0] for code in codes]
+                    pathways = [pathways[p[0]] for p in occurrences]
+                    # Validation
+                    if i == len(network.variant.data.index) - 1:
+                        iter_count += 1
+                        if iter_count >= self.max_global_iterations:
+                            condition_result = False
+                            break
+                        if len(pathways) != n_pathways:
+                            i = 0
+                            n_pathways = len(pathways)
+                            continue
+                    i += 1
+                    # Redundant condition for unforeseen conflicts
+                    if i >= len(network.variant.data.index) and p <= p_limit:
                         i = 0
-                        n_pathways = len(pathways)
-                        continue
-                i += 1
-                # Redundant condition for unforeseen conflicts
-                if i >= len(network.variant.data.index) and p <= p_limit:
-                    i = 0
-                    p += 1
-
-        except InputAlterationException:
-            # If the map of the INPUT is altered the simulation is not valid.
-            condition_result = False
-        except ConvergenceException:
-            # If the resolution does not converge
-            condition_result = False
-        # Update progress
-        # bar.update(iterations_count)
-        # iterations_count += 1
-        # Check the condition and add the new result
-        if condition_result:
-            # Apply all the pathways over the map
-            network.original_map.modificate_maps(pathways)
-            # Get the expression from the maps
-            expressions = list(network.original_map.get_expressions())
-            # Validation with the attractors
-            primes = FileExchange.bnet2primes('\n'.join(expressions))
-            stg = StateTransitionGraphs.primes2stg(primes, "synchronous")
-            steady, cyclic = Attractors.compute_attractors_tarjan(stg)
-            result = Result(network=network.structure,
-                            pathways=pathways,
-                            maps_set=network.original_map,
-                            conflicts=conflicts,
-                            simulation=m,
-                            iterations=iter_count,
-                            expressions=expressions,
-                            attractors={'steady': steady, 'cyclic': cyclic},
-                            variant=network.variant,
-                            priority_matrix=priority_matrix,
-                            roles_set=network.variant.roles)
-            # Set if the result has been successful and return it
-            result.accepted = all([True if att in steady else False for att in self.attractors])
-            return result
+                        p += 1
+    
+            except InputAlterationException:
+                # If the map of the INPUT is altered the simulation is not valid.
+                condition_result = False
+            except ConvergenceException:
+                # If the resolution does not converge
+                condition_result = False
+            # Update progress
+            # bar.update(iterations_count)
+            # iterations_count += 1
+            # Check the condition and add the new result
+            if condition_result:
+                # Apply all the pathways over the map
+                network.original_map.modificate_maps(pathways)
+                # Get the expression from the maps
+                expressions = list(network.original_map.get_expressions())
+                # Validation with the attractors
+                primes = FileExchange.bnet2primes('\n'.join(expressions))
+                stg = StateTransitionGraphs.primes2stg(primes, "synchronous")
+                steady, cyclic = Attractors.compute_attractors_tarjan(stg)
+                result = Result(network=network.structure,
+                                pathways=pathways,
+                                maps_set=network.original_map,
+                                conflicts=conflicts,
+                                simulation=m,
+                                iterations=iter_count,
+                                expressions=expressions,
+                                attractors={'steady': steady, 'cyclic': cyclic},
+                                variant=network.variant,
+                                priority_matrix=priority_matrix,
+                                roles_set=network.variant.roles)
+                # Set if the result has been successful and return it
+                result.accepted = all([True if att in steady else False for att in self.attractors])
+                yield result
 
     def third_validation(self, max_pathways=6400):
         """
@@ -202,13 +214,25 @@ class Validation:
         :param method: [string] validation method for the attractors.
         :param max_pathways: [int] parameter to set the maximum number of pathways.
         """
-        # Launch the simulations
+        # Prepare simulations
         iters = list(itertools.product(range(0, self.simulations), self.networks, repeat=1))
+        results = []
         n_procs = mp.cpu_count()
-        pool = mp.Pool(n_procs)
-        jobs = pool.map_async(self.validation, iters)
-        pool.close()
-        results = list(filter(lambda x: x is not None, jobs.get()))
+        limit = 5000
+        n_chunks = ceil(len(iters)/limit) if len(iters) >= limit else 1  # Divide the data in managable fragments
+        chunks = np.array_split(iters, n_chunks)
+        # Launch simulations
+        for chunk in chunks:
+            processes = []
+            groups = np.array_split(chunk, n_procs)  # Divide each data chunk in a subset destined to each process
+            manager = mp.Manager()
+            shared_list = manager.list()
+            for group in groups:
+                process = mp.Process(target=self.validation, args=(group, shared_list))
+                processes.append(process)
+                process.start()
+                process.join()
+            results.extend(shared_list)
         # Delete repeated networks
         registry = []
         final_results = []
@@ -219,7 +243,6 @@ class Validation:
         return final_results
 
 
-
     def group_results(self):
         """
         DESCRIPTION:
@@ -227,6 +250,8 @@ class Validation:
         attractors.
         :return: [dictionary] grouped results.
         """
+        # Group cyclic attractors
+        cyclic_results = [result for result in self.results if len(result.attractors['cyclic']) != 0]
         # Group non-cyclic attractors
         non_cyclic_results = [result for result in self.results if len(result.attractors['cyclic']) == 0]
         # With the same number of steady states and non cyclic
@@ -264,9 +289,14 @@ class Validation:
         for result in sn_at_least_three_of_all:
             if len([att for att in self.attractors if att in result.attractors['steady']]) > 3:
                 sn_at_least_four_of_all.append(result)
+        one_or_two_over_three = []
+        for result in at_least_one_of_all:
+            if len([att for att in self.attractors if att in result.attractors['steady']]) > 1:
+                if len(result.attractors['steady']) == 3:
+                    one_or_two_over_three.append(result)
         # Organize the response
         grouped_results = {
-            'total_results': self.results,
+            'cyclic_results': cyclic_results,
             'non_cyclic_results': non_cyclic_results,
             'same_number': same_number,
             'one_of_all': at_least_one_of_all,
@@ -276,7 +306,8 @@ class Validation:
             'three_of_all': at_least_three_of_all,
             'same_number_and_three_of_all': sn_at_least_three_of_all,
             'four_of_all': at_least_four_of_all,
-            'same_number_and_four_of_all': sn_at_least_four_of_all
+            'same_number_and_four_of_all': sn_at_least_four_of_all,
+            'one_or_two_over_three': one_or_two_over_three
         }
         return grouped_results
 
@@ -289,4 +320,3 @@ class Validation:
         self.results = list(self.third_validation())
         # Group results by similarity
         return self.group_results()
-
