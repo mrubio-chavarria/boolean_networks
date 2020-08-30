@@ -21,6 +21,5 @@ src/stp/__pycache__/
 src/examples/test.py
 src/graphs/__pycache__/
 src/logic/__pycache__/
-src/examples/inference_example.py
 .env
 resultados_extraidos/
